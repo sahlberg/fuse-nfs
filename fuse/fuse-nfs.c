@@ -265,7 +265,7 @@ static struct fuse_operations nfs_oper = {
 
 void print_usage(char *name)
 {
-	printf("Usage: %s [-?|--help] [-n|--nfs-share=nfs-url] [-m|--mountpoint=mountpoint]\n",
+	printf("Usage: %s [-?|--help] [-a|--allow-other] [-n|--nfs-share=nfs-url] [-m|--mountpoint=mountpoint]\n",
 		name);
 	exit(0);
 }
@@ -275,6 +275,7 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	static struct option long_opts[] = {
 		{ "help", no_argument, 0, '?' },
+		{ "allow-other", no_argument, 0, 'a' },
 		{ "nfs-share", required_argument, 0, 'n' },
 		{ "mountpoint", required_argument, 0, 'm' },
 		{ NULL, 0, 0, 0 }
@@ -284,11 +285,10 @@ int main(int argc, char *argv[])
 	char *url = NULL;
 	char *mnt = NULL;
 	char *server = NULL, *export = NULL, *strp;
-	int fuse_nfs_argc = 6;
+	int fuse_nfs_argc = 5;
 	char *fuse_nfs_argv[16] = {
 		"fuse-nfs",
 		"<export>",
-		"-oallow_other",
 		"-odefault_permissions",
 		"-omax_write=32768",
 		"-s",
@@ -302,15 +302,19 @@ int main(int argc, char *argv[])
 		NULL,
 		NULL,
 		NULL,
+		NULL,
         };
 
-	while ((c = getopt_long(argc, argv, "?hm:n:", long_opts,
+	while ((c = getopt_long(argc, argv, "?ham:n:", long_opts,
 		    &opt_idx)) > 0) {
 		switch (c) {
 		case 'h':
 		case '?':
 			print_usage(argv[0]);
 			return 0;
+		case 'a':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oallow_other";
+			break;
 		case 'm':
 			mnt = strdup(optarg);
 			break;
