@@ -1,0 +1,63 @@
+fuse-nfs
+========
+
+This is a fuse module that implements the NFSv3 protocol.
+
+
+ROOT vs NON-ROOT
+================
+By default, most NFS servers will only allow access from clients that are
+using a system port (i.e. a port < 1024).
+Since these ports by default can only be used by the root user this will
+prevent non-root users from conencting to the NFS server or mounting the
+filesystem.
+
+There are two ways to solve this:
+1, cap_net_bind_service
+-----------------------
+On Linux, when this capability is set the kernel will allow that program
+to use system ports for any user that runs that program.
+
+  sudo setcap 'cap_net_bind_service=+ep' ./fuse/fuse-nfs
+
+Setting this capability will allow normal non-root users to access the NFS
+server.
+
+2, insecure
+-----------
+Alternatively you can often disable the "chack that the client connects from
+a system port" in the NFS server itself.
+On Linux NFS servers this is done by adding the "insecure" keyword to
+the /etc/exports file.
+
+
+URL-FORMAT:
+===========
+Libnfs uses RFC2224 style URLs extended with libnfs specific url arguments some minor extensions.
+The basic syntax of these URLs is :
+
+nfs://<server|ipv4|ipv6>/path[?arg=val[&arg=val]*]
+
+Arguments supported by libnfs are :
+ tcp-syncnt=<int>  : Number of SYNs to send during the session establish
+                     before failing setting up the tcp connection to the
+                     server.
+ uid=<int>         : UID value to use when talking to the server.
+                     default it 65534 on Windows and getuid() on unixen.
+ gid=<int>         : GID value to use when talking to the server.
+                     default it 65534 on Windows and getgid() on unixen.
+ readahead=<int>   : Enable readahead for files and set the maximum amount
+                     of readahead to <int>.
+ auto-traverse-mounts=<0|1>
+                   : Should libnfs try to traverse across nested mounts
+		     automatically or not. Default is 1 == enabled.
+
+
+To mount a filesystem:
+======================
+fuse-nfs -n nfs://127.0.0.1/data/tmp -m /my/mountpoint
+
+
+To unmount a filesystem:
+========================
+fusermount -u /my/mountpoint

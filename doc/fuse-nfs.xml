@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<refentry id="fuse-nfs.1">
+
+<refmeta>
+	<refentrytitle>fuse-nfs</refentrytitle>
+	<manvolnum>1</manvolnum>
+	<refmiscinfo class="source">fuse-nfs</refmiscinfo>
+	<refmiscinfo class="manual">fuse-nfs</refmiscinfo>
+</refmeta>
+
+
+<refnamediv>
+	<refname>fuse-nfs</refname>
+        <refpurpose>A FUSE filesystem for NFS</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+	<cmdsynopsis>
+		<command>fuse-nfs [ OPTIONS ]</command>
+	</cmdsynopsis>
+	
+	<cmdsynopsis>
+		<command>fuse-nfs</command>
+		<arg choice="opt">-n --nfs-share=&lt;NFS-URL&gt;</arg>
+		<arg choice="opt">-m --mountpoint=&lt;path&gt;</arg>
+		<arg choice="opt">-a --allow-other</arg>
+		<arg choice="opt">-? --help</arg>
+		<arg choice="opt">--usage</arg>
+	</cmdsynopsis>
+	
+</refsynopsisdiv>
+
+  <refsect1><title>DESCRIPTION</title>
+    <para>
+      fuse-nfs is a FUSE filesystem that implements the NFS protocol.
+    </para>
+    <para>
+      Example: Mounting a filesystem
+      <screen format="linespecific">
+$ fuse-nfs -n nfs://127.0.0.1/data/tmp -m /data/sahlberg/foo
+      </screen>
+    </para>
+    <para>
+      Example: Unounting a filesystem
+      <screen format="linespecific">
+$ fusermount -u /data/sahlberg/foo
+      </screen>
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>OPTIONS</title>
+
+    <variablelist>
+
+      <varlistentry><term>-a --allow-user</term>
+        <listitem>
+          <para>
+	    By default, only the user that mounted the FUSE filesystem will
+	    be able to access it. Use this argument to make the filesystem
+	    accessible to all users.
+	  </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry><term>-n --nfs-share=&lt;NFS-URL&gt;</term>
+        <listitem>
+          <para>
+	    Specify the server/export to mount.
+	  </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry><term>-m --mountpoint=&lt;path&gt;</term>
+        <listitem>
+          <para>
+	    The local mountpoint to use.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry><term>-? --help</term>
+        <listitem>
+          <para>
+	    Display basic help text.
+	  </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry><term>--usage</term>
+        <listitem>
+          <para>
+	    Display basic usage text.
+	  </para>
+        </listitem>
+      </varlistentry>
+
+    </variablelist>
+  </refsect1>
+
+  <refsect1><title>NFS-URL</title>
+    <para>
+Libnfs uses RFC2224 style URLs extended with libnfs specific url arguments
+and some minor extensions.
+The basic syntax of these URLs is
+
+      <screen format="linespecific">
+	nfs://&lt;server|ipv4|ipv6&gt;/path[?arg=val[&amp;arg=val]*]
+      </screen>
+    </para>
+
+    <variablelist>
+      <para>
+	URL Arguments:
+      </para>
+      <varlistentry><term>tcp-syncnt=&lt;int&gt;</term>
+        <listitem>
+	  <para>
+	    Number of SYNs to send during the session establish
+            before failing setting up the tcp connection to the
+            server.
+	  </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry><term>uid=&lt;int&gt;</term>
+        <listitem>
+	  <para>
+            UID value to use when talking to the server.
+            default it 65534 on Windows and getuid() on unixen.
+	  </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry><term>gid=&lt;int&gt;</term>
+        <listitem>
+	  <para>
+            GID value to use when talking to the server.
+            default it 65534 on Windows and getgid() on unixen.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry><term>readahead=&lt;int&gt;</term>
+        <listitem>
+	  <para>
+	    Enable readahead for files and set the maximum amount
+            of readahead to &lt;int&gt;.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry><term> auto-traverse-mounts=&lt;0|1&gt;</term>
+        <listitem>
+	  <para>
+            Should libnfs try to traverse across nested mounts
+	    automatically or not. Default is 1 == enabled.
+	  </para>
+	</listitem>
+      </varlistentry>
+
+    </variablelist>
+
+  </refsect1>
+
+  <refsect1><title>ROOT vs NON-ROOT</title>
+    <para>
+      NFS servers by default restrict access to only those clients that connect
+      from a systems port, i.e. a port number less than 1024. In Un*x access
+      to these ports are traditionally reserved to the root user which means
+      that a non-root user will normally not be able to use fuse-nfs to access
+      an NFS share.
+    </para>
+    <para>
+      There are two ways to solve this and allow non-root users to use fuse-nfs:
+    </para>
+
+    <refsect2><title>cap_net_bind_service</title>
+    <para>
+      Adding this capability to the fuse-nfs binary the linux kernel will
+      now allow the use of systems port for any user of this binary which
+      will allow fuse-nfs to connect to the server.
+    </para>
+    <screen format="linespecific">
+$ sudo setcap 'cap_net_bind_service=+ep' fuse-nfs
+    </screen>
+    </refsect2>
+
+    <refsect2><title>insecure mode</title>
+    <para>
+      Alternatively you can disable the check in the NFS server that blocks
+      non-system ports from connecting.
+      In Linux NFS servers this is done by adding the "insecure" option
+      to /etc/exports
+    </para>
+    </refsect2>
+
+  </refsect1>
+
+  <refsect1><title>SEE ALSO</title>
+    <para>
+      <ulink url="http://github.com/sahlberg/libnfs"/>
+    </para>
+  </refsect1>
+
+</refentry>

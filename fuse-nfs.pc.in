@@ -1,0 +1,14 @@
+# fuse-nfs pkg-config file
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: fuse-nfs
+Description: fuse-nfs is a fuse module for NFSv3
+Version: @VERSION@
+Requires:
+Conflicts:
+Libs: -L${libdir} -lnfs
+Cflags: -I${includedir}
