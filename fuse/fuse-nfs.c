@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
 	int opt_idx = 0;
 	char *url = NULL;
 	char *mnt = NULL;
-	char *server = NULL, *export = NULL, *strp;
+  	struct nfs_url *urls = NULL;
 	int fuse_nfs_argc = 5;
 	char *fuse_nfs_argv[16] = {
 		"fuse-nfs",
@@ -337,64 +337,34 @@ int main(int argc, char *argv[])
 		goto finished;
 	}
 
-
-	if (strncmp(url, "nfs://", 6)) {
-		fprintf(stderr, "Invalid URL specified.\n");
-		ret = 10;
-		goto finished;
-	}
-	server = strdup(url + 6);
-	if (server == NULL) {
-		fprintf(stderr, "Failed to strdup server string\n");
-		ret = 10;
-		goto finished;
-	}
-	if (server[0] == '/' || server[0] == '\0') {
-		fprintf(stderr, "Invalid server string.\n");
-		ret = 10;
-		goto finished;
-	}
-	strp = strchr(server, '/');
-	if (strp == NULL) {
-		fprintf(stderr, "Invalid URL specified.\n");
-		ret = 10;
-		goto finished;
-	}
-	export = strdup(strp);
-	if (export == NULL) {
-		fprintf(stderr, "Failed to strdup server string\n");
-		ret = 10;
-		goto finished;
-	}
-	if (export[0] != '/') {
-		fprintf(stderr, "Invalid export.\n");
-		ret = 10;
-		goto finished;
-	}
-	*strp = 0;
-
 	nfs = nfs_init_context();
 	if (nfs == NULL) {
-		printf("failed to init context\n");
+		fprintf(stderr, "Failed to init context\n");
+		ret = 10;
 		goto finished;
 	}
 
-	ret = nfs_mount(nfs, server, export);
+	urls = nfs_parse_url_dir(nfs, url);
+        if (urls == NULL) {
+		fprintf(stderr, "Failed to parse url : %s\n", nfs_get_error(nfs));
+		ret = 10;
+		goto finished;
+        }
+
+	ret = nfs_mount(nfs, urls->server, urls->path);
 	if (ret != 0) {
- 		printf("Failed to mount nfs share : %s\n", nfs_get_error(nfs));
+		fprintf(stderr, "Failed to mount nfs share : %s\n", nfs_get_error(nfs));
 		goto finished;
 	}
-
 
 	fuse_nfs_argv[1] = mnt;
 	return fuse_main(fuse_nfs_argc, fuse_nfs_argv, &nfs_oper, NULL);
 
 finished:
+	nfs_destroy_url(urls);
 	if (nfs != NULL) {
 		nfs_destroy_context(nfs);
 	}
-	free(server);
-	free(export);
 	free(url);
 	free(mnt);
 	return ret;
