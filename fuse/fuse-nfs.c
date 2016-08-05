@@ -66,7 +66,7 @@ static int fuse_nfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	struct nfsdir *nfsdir;
 	struct nfsdirent *nfsdirent;
 
-	int ret = 0;
+	int ret;
 
 	ret = nfs_opendir(nfs, path, &nfsdir);
 	if (ret < 0) {
@@ -76,7 +76,8 @@ static int fuse_nfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		filler(buf, nfsdirent->name, NULL, 0);
 	}
 
-	return ret;
+	nfs_closedir(nfs, nfsdir);
+	return 0;
 }
 
 static int fuse_nfs_readlink(const char *path, char *buf, size_t size)
