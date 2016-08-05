@@ -240,6 +240,28 @@ static int fuse_nfs_fsync(const char *path, int isdatasync,
 	return nfs_fsync(nfs, nfsfh);
 }
 
+static int fuse_nfs_statfs(const char *path, struct statvfs* stbuf)
+{
+        int ret = 0;
+        struct statvfs svfs;
+
+        ret = nfs_statvfs(nfs, path, &svfs);
+  
+        stbuf->f_bsize      = svfs.f_bsize;
+        stbuf->f_frsize     = svfs.f_frsize;
+        stbuf->f_fsid       = svfs.f_fsid;
+        stbuf->f_flag       = svfs.f_flag;
+        stbuf->f_namemax    = svfs.f_namemax;
+        stbuf->f_blocks     = svfs.f_blocks;
+        stbuf->f_bfree      = svfs.f_bfree;
+        stbuf->f_bavail     = svfs.f_bavail;
+        stbuf->f_files      = svfs.f_files;
+        stbuf->f_ffree      = svfs.f_ffree;
+        stbuf->f_favail     = svfs.f_favail;
+
+        return ret;
+}
+
 static struct fuse_operations nfs_oper = {
 	.chmod		= fuse_nfs_chmod,
 	.chown		= fuse_nfs_chown,
@@ -261,6 +283,7 @@ static struct fuse_operations nfs_oper = {
 	.symlink	= fuse_nfs_symlink,
 	.truncate	= fuse_nfs_truncate,
 	.write		= fuse_nfs_write,
+        .statfs 	= fuse_nfs_statfs,
 };
 
 void print_usage(char *name)
