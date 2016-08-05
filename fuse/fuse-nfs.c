@@ -303,6 +303,7 @@ int main(int argc, char *argv[])
 		{ "mountpoint", required_argument, 0, 'm' },
 		{ NULL, 0, 0, 0 }
 	};
+        char buffer[1024];
 	int c;
 	int opt_idx = 0;
 	char *url = NULL;
@@ -359,7 +360,10 @@ int main(int argc, char *argv[])
 		ret = 10;
 		goto finished;
 	}
-
+        // add FS type to 'url'
+        snprintf(buffer, sizeof(buffer), "-ofsname=%s", url);
+        fuse_nfs_argv[fuse_nfs_argc++] = buffer;
+  
 	nfs = nfs_init_context();
 	if (nfs == NULL) {
 		fprintf(stderr, "Failed to init context\n");
