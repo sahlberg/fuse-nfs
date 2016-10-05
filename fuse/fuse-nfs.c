@@ -26,8 +26,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
-
 #include <nfsc/libnfs.h>
+
+#include "../config.h"
 
 #define discard_const(ptr) ((void *)((intptr_t)(ptr)))
 
@@ -50,13 +51,21 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_size         = nfs_st.nfs_size;
 	stbuf->st_blksize      = nfs_st.nfs_blksize;
 	stbuf->st_blocks       = nfs_st.nfs_blocks;
+#ifdef HAVE_ST_ATIM
 	stbuf->st_atim.tv_sec  = nfs_st.nfs_atime;
 	stbuf->st_atim.tv_nsec = nfs_st.nfs_atime_nsec;
 	stbuf->st_mtim.tv_sec  = nfs_st.nfs_mtime;
 	stbuf->st_mtim.tv_nsec = nfs_st.nfs_mtime_nsec;
 	stbuf->st_ctim.tv_sec  = nfs_st.nfs_ctime;
 	stbuf->st_ctim.tv_nsec = nfs_st.nfs_ctime_nsec;
-
+#else
+	stbuf->st_atime      = nfs_st.nfs_atime;
+	stbuf->st_atime_nsec = nfs_st.nfs_atime_nsec;
+	stbuf->st_mtime      = nfs_st.nfs_mtime;
+	stbuf->st_mtime_nsec = nfs_st.nfs_mtime_nsec;
+	stbuf->st_ctime      = nfs_st.nfs_ctime;
+	stbuf->st_ctime_nsec = nfs_st.nfs_ctime_nsec;
+#endif
 	return ret;
 }
 

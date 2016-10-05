@@ -28,10 +28,22 @@ if test "$ac_cv_prog_gcc" = yes; then
 fi
 AC_SUBST(WARN_CFLAGS)
 
+AC_CONFIG_HEADER(config.h)
 
 AC_HEADER_ASSERT
 AC_CHECK_HEADER([fuse.h], [], [AC_MSG_ERROR([fuse.h is missing. You need to install libfuse-dev])], [])
 AC_CHECK_HEADER([nfsc/libnfs.h], [], [AC_MSG_ERROR([libnfs.h is missing. You need to install libnfs-dev])], [])
+
+AC_CACHE_CHECK([for st_atim support],libiscsi_cv_HAVE_ST_ATIM,[
+AC_TRY_COMPILE([
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>],
+[struct stat st; st.st_atim.tv_sec = 0;],
+libiscsi_cv_HAVE_ST_ATIM=yes,libiscsi_cv_HAVE_ST_ATIM=no)])
+if test x"$libiscsi_cv_HAVE_ST_ATIM" = x"yes"; then
+    AC_DEFINE(HAVE_ST_ATIM,1,[Whether we have st_atim support])
+fi
 
 #output
 AC_CONFIG_FILES([Makefile]
