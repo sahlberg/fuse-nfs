@@ -33,6 +33,22 @@
 #define discard_const(ptr) ((void *)((intptr_t)(ptr)))
 
 struct nfs_context *nfs = NULL;
+int custom_uid = -1;
+int custom_gid = -1;
+
+static int map_uid(int possible_uid) {
+    if (custom_uid != -1 && possible_uid == custom_uid){
+        return getuid();
+    }
+    return possible_uid;
+}
+
+static int map_gid(int possible_gid) {
+    if (custom_gid != -1 && possible_gid == custom_gid){
+        return getgid();
+    }
+    return possible_gid;
+}
 
 static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 {
@@ -45,8 +61,8 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_ino          = nfs_st.nfs_ino;
 	stbuf->st_mode         = nfs_st.nfs_mode;
 	stbuf->st_nlink        = nfs_st.nfs_nlink;
-	stbuf->st_uid          = nfs_st.nfs_uid;
-	stbuf->st_gid          = nfs_st.nfs_gid;
+    stbuf->st_uid          = map_uid(nfs_st.nfs_uid);
+    stbuf->st_gid          = map_gid(nfs_st.nfs_gid);
 	stbuf->st_rdev         = nfs_st.nfs_rdev;
 	stbuf->st_size         = nfs_st.nfs_size;
 	stbuf->st_blksize      = nfs_st.nfs_blksize;
@@ -318,6 +334,7 @@ int main(int argc, char *argv[])
 	int opt_idx = 0;
 	char *url = NULL;
 	char *mnt = NULL;
+    char *idstr = NULL;
   	struct nfs_url *urls = NULL;
 	int fuse_nfs_argc = 5;
 	char *fuse_nfs_argv[16] = {
@@ -382,13 +399,20 @@ int main(int argc, char *argv[])
 	}
 
 	urls = nfs_parse_url_dir(nfs, url);
-        if (urls == NULL) {
+	if (urls == NULL) {
 		fprintf(stderr, "Failed to parse url : %s\n", nfs_get_error(nfs));
 		ret = 10;
 		goto finished;
-        }
+	}
 
-	ret = nfs_mount(nfs, urls->server, urls->path);
+	if (idstr = strstr(url, "uid=")) {
+        custom_uid = atoi(&idstr[4]);
+    }
+    if (idstr = strstr(url, "gid=")) {
+        custom_gid = atoi(&idstr[4]);
+    }
+
+    ret = nfs_mount(nfs, urls->server, urls->path);
 	if (ret != 0) {
 		fprintf(stderr, "Failed to mount nfs share : %s\n", nfs_get_error(nfs));
 		goto finished;
