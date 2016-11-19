@@ -52,10 +52,24 @@ static int map_gid(int possible_gid) {
     return possible_gid;
 }
 
+/* Update the rpc credentials to the current user unless
+ * have are overriding the credentials via url arguments.
+ */
+static void update_rpc_credentials(void) {
+        if (custom_uid == -1) {
+		nfs_set_uid(nfs, fuse_get_context()->uid);
+        }
+        if (custom_gid == -1) {
+		nfs_set_gid(nfs, fuse_get_context()->gid);
+        }
+}
+
 static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 {
 	int ret = 0;
 	struct nfs_stat_64 nfs_st;
+
+        update_rpc_credentials();
 
 	ret = nfs_lstat64(nfs, path, &nfs_st);
 
@@ -95,6 +109,8 @@ static int fuse_nfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	int ret;
 
+        update_rpc_credentials();
+
 	ret = nfs_opendir(nfs, path, &nfsdir);
 	if (ret < 0) {
 		return ret;
@@ -109,6 +125,8 @@ static int fuse_nfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int fuse_nfs_readlink(const char *path, char *buf, size_t size)
 {
+        update_rpc_credentials();
+
 	return nfs_readlink(nfs, path, buf, size);
 }
 
@@ -116,6 +134,8 @@ static int fuse_nfs_open(const char *path, struct fuse_file_info *fi)
 {
 	int ret = 0;
 	struct nfsfh *nfsfh;
+
+        update_rpc_credentials();
 
 	fi->fh = 0;
 	ret = nfs_open(nfs, path, fi->flags, &nfsfh);
@@ -139,29 +159,29 @@ static int fuse_nfs_release(const char *path, struct fuse_file_info *fi)
 static int fuse_nfs_read(const char *path, char *buf, size_t size,
        off_t offset, struct fuse_file_info *fi)
 {
-	int ret = 0;
 	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
 
-	ret = nfs_pread(nfs, nfsfh, offset, size, buf);
+        update_rpc_credentials();
 
-	return ret;
+	return nfs_pread(nfs, nfsfh, offset, size, buf);
 }
 
 static int fuse_nfs_write(const char *path, const char *buf, size_t size,
        off_t offset, struct fuse_file_info *fi)
 {
-	int ret = 0;
 	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
 
-	ret = nfs_pwrite(nfs, nfsfh, offset, size, discard_const(buf));
+        update_rpc_credentials();
 
-	return ret;
+	return nfs_pwrite(nfs, nfsfh, offset, size, discard_const(buf));
 }
 
 static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	int ret = 0;
 	struct nfsfh *nfsfh;
+
+        update_rpc_credentials();
 
 	ret = nfs_creat(nfs, path, mode, &nfsfh);
 	if (ret < 0) {
@@ -175,43 +195,30 @@ static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info 
 
 static int fuse_nfs_utime(const char *path, struct utimbuf *times)
 {
-	int ret = 0;
+        update_rpc_credentials();
 
-	ret = nfs_utime(nfs, path, times);
-	if (ret < 0) {
-		return ret;
-	}
-
-	return ret;
+	return nfs_utime(nfs, path, times);
 }
 
 static int fuse_nfs_unlink(const char *path)
 {
-	int ret = 0;
+        update_rpc_credentials();
 
-	ret = nfs_unlink(nfs, path);
-	if (ret < 0) {
-		return ret;
-	}
-
-	return ret;
+	return nfs_unlink(nfs, path);
 }
 
 static int fuse_nfs_rmdir(const char *path)
 {
-	int ret = 0;
+        update_rpc_credentials();
 
-	ret = nfs_rmdir(nfs, path);
-	if (ret < 0) {
-		return ret;
-	}
-
-	return ret;
+	return nfs_rmdir(nfs, path);
 }
 
 static int fuse_nfs_mkdir(const char *path, mode_t mode)
 {
 	int ret = 0;
+
+        update_rpc_credentials();
 
 	ret = nfs_mkdir(nfs, path);
 	if (ret < 0) {
@@ -227,36 +234,50 @@ static int fuse_nfs_mkdir(const char *path, mode_t mode)
 
 static int fuse_nfs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+        update_rpc_credentials();
+
 	return nfs_mknod(nfs, path, mode, rdev);
 }
 
 static int fuse_nfs_symlink(const char *from, const char *to)
 {
+        update_rpc_credentials();
+
 	return nfs_symlink(nfs, from, to);
 }
 
 static int fuse_nfs_rename(const char *from, const char *to)
 {
+        update_rpc_credentials();
+
 	return nfs_rename(nfs, from, to);
 }
 
 static int fuse_nfs_link(const char *from, const char *to)
 {
+        update_rpc_credentials();
+
 	return nfs_link(nfs, from, to);
 }
 
 static int fuse_nfs_chmod(const char *path, mode_t mode)
 {
+        update_rpc_credentials();
+
 	return nfs_chmod(nfs, path, mode);
 }
 
 static int fuse_nfs_chown(const char *path, uid_t uid, gid_t gid)
 {
+        update_rpc_credentials();
+
 	return nfs_chown(nfs, path, uid, gid);
 }
 
 static int fuse_nfs_truncate(const char *path, off_t size)
 {
+        update_rpc_credentials();
+
 	return nfs_truncate(nfs, path, size);
 }
 
@@ -264,6 +285,8 @@ static int fuse_nfs_fsync(const char *path, int isdatasync,
 			  struct fuse_file_info *fi)
 {
 	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
+
+        update_rpc_credentials();
 
 	return nfs_fsync(nfs, nfsfh);
 }
