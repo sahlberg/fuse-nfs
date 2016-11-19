@@ -26,6 +26,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <nfsc/libnfs.h>
 
 #include "../config.h"
