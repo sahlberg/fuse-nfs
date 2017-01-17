@@ -38,6 +38,13 @@ struct nfs_context *nfs = NULL;
 int custom_uid = -1;
 int custom_gid = -1;
 
+uid_t mount_user_uid;
+gid_t mount_user_gid;
+
+int fusenfs_allow_other_own_ids=0;
+int fuse_default_permissions=1;
+int fuse_multithreads=0;
+
 static int map_uid(int possible_uid) {
     if (custom_uid != -1 && possible_uid == custom_uid){
         return getuid();
@@ -56,12 +63,22 @@ static int map_gid(int possible_gid) {
  * have are overriding the credentials via url arguments.
  */
 static void update_rpc_credentials(void) {
-        if (custom_uid == -1) {
+	if ((custom_uid == -1 || fuse_get_context()->uid != mount_user_uid) && fusenfs_allow_other_own_ids)
+	{
 		nfs_set_uid(nfs, fuse_get_context()->uid);
-        }
-        if (custom_gid == -1) {
+	}
+	else
+	{
+		nfs_set_uid(nfs, custom_uid);
+	}
+	if ((custom_gid == -1 || fuse_get_context()->gid != mount_user_gid) && fusenfs_allow_other_own_ids)
+	{
 		nfs_set_gid(nfs, fuse_get_context()->gid);
-        }
+	}
+	else 
+	{
+		nfs_set_uid(nfs, custom_gid);
+	}
 }
 
 static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
@@ -69,7 +86,7 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 	int ret = 0;
 	struct nfs_stat_64 nfs_st;
 
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	ret = nfs_lstat64(nfs, path, &nfs_st);
 
@@ -161,7 +178,7 @@ static int fuse_nfs_read(const char *path, char *buf, size_t size,
 {
 	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
 
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_pread(nfs, nfsfh, offset, size, buf);
 }
@@ -181,7 +198,7 @@ static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info 
 	int ret = 0;
 	struct nfsfh *nfsfh;
 
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	ret = nfs_creat(nfs, path, mode, &nfsfh);
 	if (ret < 0) {
@@ -195,21 +212,21 @@ static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info 
 
 static int fuse_nfs_utime(const char *path, struct utimbuf *times)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_utime(nfs, path, times);
 }
 
 static int fuse_nfs_unlink(const char *path)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_unlink(nfs, path);
 }
 
 static int fuse_nfs_rmdir(const char *path)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_rmdir(nfs, path);
 }
@@ -218,7 +235,7 @@ static int fuse_nfs_mkdir(const char *path, mode_t mode)
 {
 	int ret = 0;
 
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	ret = nfs_mkdir(nfs, path);
 	if (ret < 0) {
@@ -234,49 +251,49 @@ static int fuse_nfs_mkdir(const char *path, mode_t mode)
 
 static int fuse_nfs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_mknod(nfs, path, mode, rdev);
 }
 
 static int fuse_nfs_symlink(const char *from, const char *to)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_symlink(nfs, from, to);
 }
 
 static int fuse_nfs_rename(const char *from, const char *to)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_rename(nfs, from, to);
 }
 
 static int fuse_nfs_link(const char *from, const char *to)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_link(nfs, from, to);
 }
 
 static int fuse_nfs_chmod(const char *path, mode_t mode)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_chmod(nfs, path, mode);
 }
 
 static int fuse_nfs_chown(const char *path, uid_t uid, gid_t gid)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_chown(nfs, path, uid, gid);
 }
 
 static int fuse_nfs_truncate(const char *path, off_t size)
 {
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_truncate(nfs, path, size);
 }
@@ -286,7 +303,7 @@ static int fuse_nfs_fsync(const char *path, int isdatasync,
 {
 	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
 
-        update_rpc_credentials();
+	update_rpc_credentials();
 
 	return nfs_fsync(nfs, nfsfh);
 }
@@ -339,35 +356,161 @@ static struct fuse_operations nfs_oper = {
 
 void print_usage(char *name)
 {
-	printf("Usage: %s [-?|--help] [-a|--allow-other] [-n|--nfs-share=nfs-url] [-m|--mountpoint=mountpoint]\n",
-		name);
+	printf("Usage : %s \n",name);
+
+	printf( "\t [-?|--help] \n"
+			"\nfuse-nfs options : \n"
+			"\t [-U NFS_UID|--fusenfs_uid=NFS_UID] \n"
+			"\t\t The uid passed within the rpc credentials within the mount point \n"
+			"\t\t This is the same as passing the uid within the url, however if both are defined then the url's one is used\n"
+			"\t [-G NFS_GID|--fusenfs_gid=NFS_GID] \n"
+			"\t\t The gid passed within the rpc credentials within the mount point \n"
+			"\t\t This is the same as passing the gid within the url, however if both are defined then the url's one is used\n"
+			"\t [-o|--fusenfs_allow_other_own_ids] \n"
+			"\t\t Allow fuse-nfs with allow_user activated to update the rpc credentials with the current (other) user credentials instead\n"
+			"\t\t of using the mount user credentials or (if defined) the custom credentials defined with -U/-G / url \n" 
+			"\t\t This option activate allow_other, note that allow_other need user_allow_other to be defined in fuse.conf \n"
+			"\nlibnfs options : \n"
+			"\t [-n SHARE|--nfs_share=SHARE] \n"
+			"\t\t The server export to be mounted \n"
+			"\t [-m MNTPOINT|--mountpoint=MNTPOINT] \n"
+			"\t\t The client mount point \n"
+			"\nfuse options (see man mount.fuse): \n"
+			"\t [-p [0|1]|--default_permissions=[0|1]] \n"
+			"\t\t The fuse default_permissions option do not have any argument , for compatibility with previous fuse-nfs version default is activated (1)\n"
+			"\t\t with the possibility to overwrite this behavior (0) \n"
+			"\t [-t [0|1]|--multithread=[0|1]] \n"
+			"\t\t Single threaded by default (0) , may have issue with nfs and fuse multithread (1) \n"
+			"\t [-a|--allow_other] \n"
+			"\t [-r|--allow_root] \n"
+			"\t [-u FUSE_UID|--uid=FUSE_UID] \n"
+			"\t [-g FUSE_GID|--gid=FUSE_GID] \n"
+			"\t [-U UMASK|--umask=UMASK] \n"
+			"\t [-d|--direct_io] \n"
+			"\t [-k|--kernel_cache] \n"
+			"\t [-c|--auto_cache] \n"
+			"\t [-E TIMEOUT|--entry_timeout=TIMEOUT] \n"
+			"\t [-N TIMEOUT|--negative_timeout=TIMEOUT] \n"
+			"\t [-T TIMEOUT|--attr_timeout=TIMEOUT] \n"
+			"\t [-C TIMEOUT|--ac_attr_timeout=TIMEOUT] \n"
+			"\t [-l|--large_read] \n"
+			"\t [-R MAX_READ|--max_read=MAX_READ] \n"
+			"\t [-H MAX_READAHEAD|--max_readahead=MAX_READAHEAD] \n"
+			"\t [-A|--async_read] \n"
+			"\t [-S|--sync_read] \n"
+			"\t [-W MAX_WRITE|--max_write=MAX_WRITE] \n"
+			"\t\t Default is 32768 \n"
+			"\t [-h|--hard_remove] \n"
+			"\t [-Y|--nonempty] \n"
+			"\t [-q|--use_ino] \n"
+			"\t [-Q|--readdir_ino] \n"
+			"\t [-f FSNAME|--fsname=FSNAME] \n"
+			"\t\t Default is the SHARE provided with -m \n"
+			"\t [-s SUBTYPE|--subtype=SUBTYPE] \n"
+			"\t\t Default is fuse-nfs with kernel prefexing with fuse. \n"
+			"\t [-b|--blkdev] \n"
+			"\t [-D|--debug] \n"
+			"\t [-i|--intr] \n"
+			"\t [-I SIGNAL|--intr_signal=SIGNAL] \n"
+			);
 	exit(0);
 }
 
 int main(int argc, char *argv[])
 {
+	mount_user_uid=getuid();
+	mount_user_gid=getgid();
+
 	int ret = 0;
 	static struct option long_opts[] = {
+		/*fuse-nfs options*/
 		{ "help", no_argument, 0, '?' },
-		{ "allow-other", no_argument, 0, 'a' },
-		{ "nfs-share", required_argument, 0, 'n' },
+		{ "nfs_share", required_argument, 0, 'n' },
 		{ "mountpoint", required_argument, 0, 'm' },
+		{ "fusenfs_uid", required_argument, 0, 'U' },
+		{ "fusenfs_gid", required_argument, 0, 'G' },
+		{ "fusenfs_allow_other_own_ids", no_argument, 0, 'o' },
+		/*fuse options*/
+		{ "allow_other", no_argument, 0, 'a' },
+		{ "uid", required_argument, 0, 'u' },
+		{ "gid", required_argument, 0, 'g' },
+		{ "debug", no_argument, 0, 'D' },
+		{ "default_permissions", required_argument, 0, 'p' },
+		{ "direct_io", no_argument, 0, 'd' },
+		{ "allow_root", no_argument, 0, 'r' },
+		{ "kernel_cache", no_argument, 0, 'k' },
+		{ "auto_cache", no_argument, 0, 'c' },
+		{ "large_read", no_argument, 0, 'l' },
+		{ "hard_remove", no_argument, 0, 'h' },
+		{ "fsname", required_argument, 0, 'f' },
+		{ "subtype", required_argument, 0, 's' },
+		{ "blkdev", no_argument, 0, 'b' },
+		{ "intr", no_argument, 0, 'i' },
+		{ "max_read", required_argument, 0, 'R' },
+		{ "max_readahead", required_argument, 0, 'H' },
+		{ "async_read", no_argument, 0, 'A' },
+		{ "sync_read", no_argument, 0, 'S' },
+		{ "umask", required_argument, 0, 'U' },
+		{ "entry_timeout", required_argument, 0, 'E' },
+		{ "negative_timeout", required_argument, 0, 'N' },
+		{ "attr_timeout", required_argument, 0, 'T' },
+		{ "ac_attr_timeout", required_argument, 0, 'C' },
+		{ "nonempty", no_argument, 0, 'Y' },
+		{ "intr_signal", required_argument, 0, 'I' },
+		{ "use_ino", no_argument, 0, 'q' },
+		{ "readdir_ino", required_argument, 0, 'Q' },
+		{ "multithread", required_argument, 0, 't' },
 		{ NULL, 0, 0, 0 }
 	};
-        char buffer[1024];
+
 	int c;
 	int opt_idx = 0;
 	char *url = NULL;
 	char *mnt = NULL;
-    char *idstr = NULL;
-  	struct nfs_url *urls = NULL;
-	int fuse_nfs_argc = 5;
-	char *fuse_nfs_argv[16] = {
+	char *idstr = NULL;
+
+	char *nfs_uid = NULL;
+	char *nfs_gid = NULL;
+	char fuse_uid_arg[32];
+	char fuse_gid_arg[32];
+	char fuse_fsname_arg[1024];
+	char fuse_subtype_arg[1024];
+	char fuse_max_write_arg[32];
+	char fuse_max_read_arg[32];
+	char fuse_max_readahead_arg[32];
+	char fuse_Umask_arg[32];
+	char fuse_entry_timeout_arg[32];
+	char fuse_negative_timeout_arg[32];
+	char fuse_attr_timeout_arg[32];
+	char fuse_ac_attr_timeout_arg[32];
+	char fuse_intr_signal_arg[32];
+
+	struct nfs_url *urls = NULL;
+
+	int fuse_nfs_argc = 2;
+	char *fuse_nfs_argv[34] = {
 		"fuse-nfs",
 		"<export>",
-		"-odefault_permissions",
-		"-omax_write=32768",
-		"-s",
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
 		NULL,
 		NULL,
 		NULL,
@@ -381,10 +524,8 @@ int main(int argc, char *argv[])
 		NULL,
         };
 
-	while ((c = getopt_long(argc, argv, "?ham:n:", long_opts,
-		    &opt_idx)) > 0) {
+	while ((c = getopt_long(argc, argv, "?am:n:U:G:u:g:Dp:drklhf:s:biR:W:H:ASK:E:N:T:C:oYI:qQct", long_opts, &opt_idx)) > 0) {
 		switch (c) {
-		case 'h':
 		case '?':
 			print_usage(argv[0]);
 			return 0;
@@ -396,6 +537,117 @@ int main(int argc, char *argv[])
 			break;
 		case 'n':
 			url = strdup(optarg);
+			break;
+		case 'U':
+			nfs_uid = strdup(optarg);
+			custom_uid=atoi(nfs_uid);
+			break;
+		case 'G':
+			nfs_gid = strdup(optarg);
+			custom_gid=atoi(nfs_gid);
+			break;
+		case 'u':
+			snprintf(fuse_uid_arg, sizeof(fuse_uid_arg), "-ouid=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_uid_arg;
+			break;
+		case 'g':
+			snprintf(fuse_gid_arg, sizeof(fuse_gid_arg), "-ogid=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_gid_arg;
+			break;
+		case 'D':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-odebug";
+			break;
+		case 'p':
+			fuse_default_permissions=atoi(strdup(optarg));
+			break;
+		case 't':
+			fuse_multithreads=atoi(strdup(optarg));
+			break;
+		case 'd':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-odirect_io";
+			break;
+		case 'r':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oallow_root";
+			break;
+		case 'k':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-okernel_cache";
+			break;
+		case 'c':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oauto_cache";
+			break;
+		case 'l':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-olarge_read";
+			break;
+		case 'h':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-ohard_remove";
+			break;
+		case 'f':
+			snprintf(fuse_fsname_arg, sizeof(fuse_fsname_arg), "-ofsname=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_fsname_arg;
+			break;
+		case 's':
+			snprintf(fuse_subtype_arg, sizeof(fuse_subtype_arg), "-osubtype=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_subtype_arg;
+			break;
+		case 'b':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oblkdev";
+			break;
+		case 'i':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-ointr";
+			break;
+		case 'R':
+			snprintf(fuse_max_read_arg, sizeof(fuse_max_read_arg), "-omax_read=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_read_arg;
+			break;
+		case 'W':
+			snprintf(fuse_max_write_arg, sizeof(fuse_max_write_arg), "-omax_write=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_write_arg;
+			break;
+		case 'H':
+			snprintf(fuse_max_readahead_arg, sizeof(fuse_max_readahead_arg), "-omax_readahead=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_readahead_arg;
+			break;
+		case 'A':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oasync_read";
+			break;
+		case 'S':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-osync_read";
+			break;
+		case 'K':
+			snprintf(fuse_Umask_arg, sizeof(fuse_Umask_arg), "-oumask=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_Umask_arg;
+			break;
+		case 'E':
+			snprintf(fuse_entry_timeout_arg, sizeof(fuse_entry_timeout_arg), "-oentry_timeout=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_entry_timeout_arg;
+			break;
+		case 'N':
+			snprintf(fuse_negative_timeout_arg, sizeof(fuse_negative_timeout_arg), "-onegative_timeout=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_negative_timeout_arg;
+			break;
+		case 'T':
+			snprintf(fuse_attr_timeout_arg, sizeof(fuse_attr_timeout_arg), "-oattr_timeout=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_attr_timeout_arg;
+			break;
+		case 'C':
+			snprintf(fuse_ac_attr_timeout_arg, sizeof(fuse_ac_attr_timeout_arg), "-oac_attr_timeout=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_ac_attr_timeout_arg;
+			break;
+		case 'o':
+            fusenfs_allow_other_own_ids=1;
+			break;
+		case 'Y':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-ononempty";
+			break;
+		case 'I':
+			snprintf(fuse_intr_signal_arg, sizeof(fuse_intr_signal_arg), "-ointr_signal=%s", strdup(optarg));
+			fuse_nfs_argv[fuse_nfs_argc++] = fuse_intr_signal_arg;
+			break;
+		case 'q':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-ouse_ino";
+			break;
+		case 'Q':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oreaddir_ino";
 			break;
 		}
 	}
@@ -412,10 +664,46 @@ int main(int argc, char *argv[])
 		ret = 10;
 		goto finished;
 	}
-        // add FS type to 'url'
-        snprintf(buffer, sizeof(buffer), "-ofsname=%s", url);
-        fuse_nfs_argv[fuse_nfs_argc++] = buffer;
-  
+	
+	/* Set allow_other if not defined and fusenfs_allow_other_own_ids defined */
+	if (fusenfs_allow_other_own_ids)
+	{
+		int i,allow_other_set=0;
+		for(i ; i < fuse_nfs_argc; ++i)
+		{
+			if(!strcmp(fuse_nfs_argv[i], "-oallow_other"))
+			{
+				allow_other_set=1;
+				break;
+			}
+		}
+		if (!allow_other_set){fuse_nfs_argv[fuse_nfs_argc++] = "-oallow_other";}
+	}
+
+	/* Set default fsname if not defined */
+	if (!strstr(fuse_fsname_arg, "-ofsname="))
+	{
+		snprintf(fuse_fsname_arg, sizeof(fuse_fsname_arg), "-ofsname=%s", url);
+		fuse_nfs_argv[fuse_nfs_argc++] = fuse_fsname_arg;
+	}
+
+	/* Set default subtype if not defined */
+	if (!strstr(fuse_subtype_arg, "-osubtype="))
+	{
+		snprintf(fuse_subtype_arg, sizeof(fuse_subtype_arg), "-osubtype=%s", "fuse-nfs");
+		fuse_nfs_argv[fuse_nfs_argc++] = fuse_subtype_arg;
+	}
+
+	if (!strstr(fuse_max_write_arg, "-omax_write="))
+	{
+		snprintf(fuse_max_write_arg, sizeof(fuse_max_write_arg), "-omax_write=%s", "32768");
+		fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_write_arg;
+	}
+
+	/* Only for compatibility with previous version */
+	if (fuse_default_permissions){fuse_nfs_argv[fuse_nfs_argc++] = "-odefault_permissions";}
+	if (!fuse_multithreads){fuse_nfs_argv[fuse_nfs_argc++] = "-s";}
+
 	nfs = nfs_init_context();
 	if (nfs == NULL) {
 		fprintf(stderr, "Failed to init context\n");
@@ -430,14 +718,10 @@ int main(int argc, char *argv[])
 		goto finished;
 	}
 
-	if (idstr = strstr(url, "uid=")) {
-        custom_uid = atoi(&idstr[4]);
-    }
-    if (idstr = strstr(url, "gid=")) {
-        custom_gid = atoi(&idstr[4]);
-    }
+	if (idstr = strstr(url, "uid=")) { custom_uid = atoi(&idstr[4]); }
+	if (idstr = strstr(url, "gid=")) { custom_gid = atoi(&idstr[4]); }
 
-    ret = nfs_mount(nfs, urls->server, urls->path);
+	ret = nfs_mount(nfs, urls->server, urls->path);
 	if (ret != 0) {
 		fprintf(stderr, "Failed to mount nfs share : %s\n", nfs_get_error(nfs));
 		goto finished;

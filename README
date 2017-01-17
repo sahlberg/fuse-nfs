@@ -12,6 +12,52 @@ $ ./configure
 $ make
 $ sudo make install
 
+FUSE OPTIONS
+============
+
+	[-?|--help]
+
+	fuse-nfs options :
+	[-U NFS_UID|--fusenfs_uid=NFS_UID]
+		The uid passed within the rpc credentials within the mount point
+		This is the same as passing the uid within the url, however if both are defined then the url's one is used
+	[-G NFS_GID|--fusenfs_gid=NFS_GID]
+		The gid passed within the rpc credentials within the mount point
+		This is the same as passing the gid within the url, however if both are defined then the url's one is used
+	[-o|--fusenfs_allow_other_own_ids]
+		Allow fuse-nfs with allow_user activated to update the rpc credentials with the current (other) user credentials instead
+		of using the mount user credentials or (if defined) the custom credentials defined with -U/-G / url
+		This option activate allow_other, note that allow_other need user_allow_other to be defined in fuse.conf
+
+	libnfs options :
+	[-n SHARE|--nfs_share=SHARE]
+		The server export to be mounted
+	[-m MNTPOINT|--mountpoint=MNTPOINT]
+		The client mount point
+
+	fuse options (see man mount.fuse):
+	[-p [0|1]|--default_permissions=[0|1]
+		The fuse default_permissions option do not have any argument , for compatibility with previous fuse-nfs version default is activated (1)
+		with the possibility to overwrite this behavior (0)
+	[-t [0|1]|--multithread=[0|1]]
+		Single threaded by default (0) , may have issue with nfs and fuse multithread (1)
+	[-a|--allow_other]
+	[-r|--allow_root]
+	[-u FUSE_UID|--uid=FUSE_UID]
+	[-g FUSE_GID|--gid=FUSE_GID]
+	[-U UMASK|--umask=UMASK]
+	[-d|--direct_io]
+	[-k|--kernel_cache]
+	[-c|--auto_cache]
+	[-E TIMEOUT|--entry_timeout=TIMEOUT]
+	[-N TIMEOUT|--negative_timeout=TIMEOUT]
+	[-T TIMEOUT|--attr_timeout=TIMEOUT]
+	[-C TIMEOUT|--ac_attr_timeout=TIMEOUT]
+	[-l|--large_read]
+
+
+
+
 ROOT vs NON-ROOT
 ================
 By default, most NFS servers will only allow access from clients that are
@@ -39,7 +85,7 @@ On Linux NFS servers this is done by adding the "insecure" keyword to
 the /etc/exports file.
 
 
-URL-FORMAT:
+LIBNFS URL-FORMAT:
 ===========
 Libnfs uses RFC2224 style URLs extended with libnfs specific url arguments some minor extensions.
 The basic syntax of these URLs is :
@@ -58,7 +104,9 @@ Arguments supported by libnfs are :
                      of readahead to <int>.
  auto-traverse-mounts=<0|1>
                    : Should libnfs try to traverse across nested mounts
-		     automatically or not. Default is 1 == enabled.
+					automatically or not. Default is 1 == enabled.
+ dircache=<0|1>    : Disable/enable directory caching. Enabled by default.
+ if=<interface>    : Interface name (e.g., eth1) to bind; requires `root`
 
 
 To mount a filesystem:
