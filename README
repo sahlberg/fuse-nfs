@@ -59,7 +59,8 @@ FUSE OPTIONS
 		The resulting permission bits are the ones missing from the given umask value.  
 		The value is given in octal representation.
 	[-d|--direct_io]
-		
+		Direct I/O is a feature of the file system whereby file reads and writes go directly from the applications to the storage device, bypassing the operating system read and write caches. 
+		Direct I/O is used only by applications (such as databases) that manage their own caches. 
 	[-k|--kernel_cache]
 		This option disables flushing the cache of the file contents on every open.
 		This should only be enabled on filesystems, where the file data is never changed externally (not through the mounted FUSE filesystem).  
