@@ -77,7 +77,7 @@ static void update_rpc_credentials(void) {
 	}
 	else 
 	{
-		nfs_set_uid(nfs, custom_gid);
+		nfs_set_gid(nfs, custom_gid);
 	}
 }
 
