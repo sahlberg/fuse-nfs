@@ -34,6 +34,8 @@ AC_HEADER_ASSERT
 AC_CHECK_HEADER([fuse.h], [], [AC_MSG_ERROR([fuse.h is missing. You need to install libfuse-dev])], [])
 AC_CHECK_HEADER([nfsc/libnfs.h], [], [AC_MSG_ERROR([libnfs.h is missing. You need to install libnfs-dev])], [])
 
+AC_CHECK_HEADERS([fuse.h])
+
 AC_CACHE_CHECK([for st_atim support],libiscsi_cv_HAVE_ST_ATIM,[
 AC_TRY_COMPILE([
 #include <sys/types.h>
@@ -44,6 +46,17 @@ libiscsi_cv_HAVE_ST_ATIM=yes,libiscsi_cv_HAVE_ST_ATIM=no)])
 if test x"$libiscsi_cv_HAVE_ST_ATIM" = x"yes"; then
     AC_DEFINE(HAVE_ST_ATIM,1,[Whether we have st_atim support])
 fi
+
+AC_SEARCH_LIBS([fuse_get_context], [fuse dokanfuse1.dll], [], [
+  AC_MSG_ERROR([fuse library unavailable])
+])
+
+OLD_LIBS=$LIBS
+LIBS+=" -lws2"
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <winsock2.h>]], [[gethostbyname ("");]])], [], [LIBS=$OLD_LIBS])
+OLD_LIBS=$LIBS
+LIBS+=" -lws2_32"
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <winsock2.h>]], [[gethostbyname ("");]])], [], [LIBS=$OLD_LIBS])
 
 #output
 AC_CONFIG_FILES([Makefile]
