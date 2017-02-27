@@ -19,6 +19,8 @@
 #define FUSE_USE_VERSION 26
 #define _FILE_OFFSET_BITS 64
 
+#include "../config.h"
+
 #include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,7 +32,9 @@
 #include <sys/types.h>
 #include <nfsc/libnfs.h>
 
-#include "../config.h"
+#ifdef WIN32
+#include <winsock2.h>
+#endif
 
 #define discard_const(ptr) ((void *)((intptr_t)(ptr)))
 
@@ -44,6 +48,20 @@ gid_t mount_user_gid;
 int fusenfs_allow_other_own_ids=0;
 int fuse_default_permissions=1;
 int fuse_multithreads=0;
+
+#ifdef __MINGW32__
+gid_t getgid(){
+	if( custom_gid == -1 )
+		return 65534;
+	return custom_gid;
+}
+
+uid_t getuid(){
+	if( custom_uid == -1 )
+		return 65534;
+	return custom_uid;
+}
+#endif
 
 static int map_uid(int possible_uid) {
     if (custom_uid != -1 && possible_uid == custom_uid){
@@ -98,8 +116,12 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
     stbuf->st_gid          = map_gid(nfs_st.nfs_gid);
 	stbuf->st_rdev         = nfs_st.nfs_rdev;
 	stbuf->st_size         = nfs_st.nfs_size;
+
+#ifndef __MINGW32__
 	stbuf->st_blksize      = nfs_st.nfs_blksize;
 	stbuf->st_blocks       = nfs_st.nfs_blocks;
+#endif
+
 #ifdef HAVE_ST_ATIM
 	stbuf->st_atim.tv_sec  = nfs_st.nfs_atime;
 	stbuf->st_atim.tv_nsec = nfs_st.nfs_atime_nsec;
@@ -109,11 +131,13 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_ctim.tv_nsec = nfs_st.nfs_ctime_nsec;
 #else
 	stbuf->st_atime      = nfs_st.nfs_atime;
-	stbuf->st_atime_nsec = nfs_st.nfs_atime_nsec;
 	stbuf->st_mtime      = nfs_st.nfs_mtime;
-	stbuf->st_mtime_nsec = nfs_st.nfs_mtime_nsec;
 	stbuf->st_ctime      = nfs_st.nfs_ctime;
+#ifndef __MINGW32__
+	stbuf->st_atime_nsec = nfs_st.nfs_atime_nsec;
+	stbuf->st_mtime_nsec = nfs_st.nfs_mtime_nsec;
 	stbuf->st_ctime_nsec = nfs_st.nfs_ctime_nsec;
+#endif
 #endif
 	return ret;
 }
@@ -720,6 +744,11 @@ int main(int argc, char *argv[])
 
 	if (idstr = strstr(url, "uid=")) { custom_uid = atoi(&idstr[4]); }
 	if (idstr = strstr(url, "gid=")) { custom_gid = atoi(&idstr[4]); }
+
+	#ifdef WIN32
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2,2),&wsaData);
+	#endif
 
 	ret = nfs_mount(nfs, urls->server, urls->path);
 	if (ret != 0) {
