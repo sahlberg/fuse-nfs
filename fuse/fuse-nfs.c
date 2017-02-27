@@ -36,6 +36,10 @@
 #include <winsock2.h>
 #endif
 
+#ifndef FUSE_STAT
+#define FUSE_STAT stat
+#endif
+
 #define discard_const(ptr) ((void *)((intptr_t)(ptr)))
 
 struct nfs_context *nfs = NULL;
@@ -99,7 +103,7 @@ static void update_rpc_credentials(void) {
 	}
 }
 
-static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
+static int fuse_nfs_getattr(const char *path, struct FUSE_STAT *stbuf)
 {
 	int ret = 0;
 	struct nfs_stat_64 nfs_st;
@@ -116,13 +120,10 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
     stbuf->st_gid          = map_gid(nfs_st.nfs_gid);
 	stbuf->st_rdev         = nfs_st.nfs_rdev;
 	stbuf->st_size         = nfs_st.nfs_size;
-
-#ifndef __MINGW32__
 	stbuf->st_blksize      = nfs_st.nfs_blksize;
 	stbuf->st_blocks       = nfs_st.nfs_blocks;
-#endif
 
-#ifdef HAVE_ST_ATIM
+#if defined(HAVE_ST_ATIM) || defined(__MINGW32__)
 	stbuf->st_atim.tv_sec  = nfs_st.nfs_atime;
 	stbuf->st_atim.tv_nsec = nfs_st.nfs_atime_nsec;
 	stbuf->st_mtim.tv_sec  = nfs_st.nfs_mtime;
@@ -133,11 +134,9 @@ static int fuse_nfs_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_atime      = nfs_st.nfs_atime;
 	stbuf->st_mtime      = nfs_st.nfs_mtime;
 	stbuf->st_ctime      = nfs_st.nfs_ctime;
-#ifndef __MINGW32__
 	stbuf->st_atime_nsec = nfs_st.nfs_atime_nsec;
 	stbuf->st_mtime_nsec = nfs_st.nfs_mtime_nsec;
 	stbuf->st_ctime_nsec = nfs_st.nfs_ctime_nsec;
-#endif
 #endif
 	return ret;
 }
