@@ -81,6 +81,20 @@ static int map_gid(int possible_gid) {
     return possible_gid;
 }
 
+static int map_reverse_uid(int possible_uid) {
+    if (custom_uid != -1 && possible_uid == getuid()) {
+        return custom_uid;
+    }
+    return possible_uid;
+}
+
+static int map_reverse_gid(int possible_gid) {
+    if (custom_gid != -1 && possible_gid == getgid()){
+        return custom_gid;
+    }
+    return possible_gid;
+}
+
 /* Update the rpc credentials to the current user unless
  * have are overriding the credentials via url arguments.
  */
@@ -311,7 +325,7 @@ static int fuse_nfs_chown(const char *path, uid_t uid, gid_t gid)
 {
 	update_rpc_credentials();
 
-	return nfs_chown(nfs, path, uid, gid);
+	return nfs_chown(nfs, path, map_reverse_uid(uid), map_reverse_gid(gid));
 }
 
 static int fuse_nfs_truncate(const char *path, off_t size)
