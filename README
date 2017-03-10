@@ -147,3 +147,13 @@ fuse-nfs -n nfs://127.0.0.1/data/tmp -m /my/mountpoint
 To unmount a filesystem:
 ========================
 fusermount -u /my/mountpoint
+
+
+Windows
+=======
+Daniel Abrech (https://github.com/Daniel-Abrecht) has ported this fuse module
+to windows using the dokany filesystem/fuse wrapper.
+
+Windows builds for this module can be downloaded from :
+https://github.com/Daniel-Abrecht/fuse-nfs-crossbuild-scripts/releases
+
