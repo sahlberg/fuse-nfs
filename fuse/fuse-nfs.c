@@ -435,6 +435,7 @@ void print_usage(char *name)
 			"\t [-D|--debug] \n"
 			"\t [-i|--intr] \n"
 			"\t [-I SIGNAL|--intr_signal=SIGNAL] \n"
+			"\t [-O|--read_only] \n"
 			);
 	exit(0);
 }
@@ -483,6 +484,7 @@ int main(int argc, char *argv[])
 		{ "use_ino", no_argument, 0, 'q' },
 		{ "readdir_ino", required_argument, 0, 'Q' },
 		{ "multithread", required_argument, 0, 't' },
+		{ "read_only", no_argument, 0, 'O' },
 		{ NULL, 0, 0, 0 }
 	};
 
@@ -547,7 +549,7 @@ int main(int argc, char *argv[])
 		NULL,
         };
 
-	while ((c = getopt_long(argc, argv, "?am:n:U:G:u:g:Dp:drklhf:s:biR:W:H:ASK:E:N:T:C:oYI:qQct", long_opts, &opt_idx)) > 0) {
+	while ((c = getopt_long(argc, argv, "?am:n:U:G:u:g:Dp:drklhf:s:biR:W:H:ASK:E:N:T:C:oYI:qQctO", long_opts, &opt_idx)) > 0) {
 		switch (c) {
 		case '?':
 			print_usage(argv[0]);
@@ -671,6 +673,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'Q':
 			fuse_nfs_argv[fuse_nfs_argc++] = "-oreaddir_ino";
+			break;
+	        case 'O':
+			fuse_nfs_argv[fuse_nfs_argc++] = "-oro";
 			break;
 		}
 	}
