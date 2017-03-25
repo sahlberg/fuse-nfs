@@ -151,9 +151,16 @@ fusermount -u /my/mountpoint
 
 Windows
 =======
-Daniel Abrech (https://github.com/Daniel-Abrecht) has ported this fuse module
-to windows using the dokany filesystem/fuse wrapper.
+The following are ports to windows:
 
-Windows builds for this module can be downloaded from :
-https://github.com/Daniel-Abrecht/fuse-nfs-crossbuild-scripts/releases
+* Daniel Abrech (https://github.com/Daniel-Abrecht) has ported this fuse module
+  to windows using the dokany filesystem/fuse wrapper.
 
+  Windows builds for this module can be downloaded from :
+  https://github.com/Daniel-Abrecht/fuse-nfs-crossbuild-scripts/releases
+
+* Bill Zissimopoulos (https://github.com/billziss-gh) has ported this fuse
+  module to windows using WinFsp.
+
+  The NFS-Win port (including MSI installers) can be found here:
+  https://github.com/billziss-gh/nfs-win
