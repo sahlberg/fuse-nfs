@@ -710,7 +710,7 @@ int main(int argc, char *argv[])
 	/* Set allow_other if not defined and fusenfs_allow_other_own_ids defined */
 	if (fusenfs_allow_other_own_ids)
 	{
-		int i,allow_other_set=0;
+		int i = 0, allow_other_set=0;
 		for(i ; i < fuse_nfs_argc; ++i)
 		{
 			if(!strcmp(fuse_nfs_argv[i], "-oallow_other"))
