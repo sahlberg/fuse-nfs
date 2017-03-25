@@ -51,12 +51,17 @@ AC_SEARCH_LIBS([fuse_get_context], [fuse dokanfuse1.dll], [], [
   AC_MSG_ERROR([fuse library unavailable])
 ])
 
-OLD_LIBS=$LIBS
-LIBS+=" -lws2"
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <winsock2.h>]], [[gethostbyname ("");]])], [], [LIBS=$OLD_LIBS])
-OLD_LIBS=$LIBS
-LIBS+=" -lws2_32"
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <winsock2.h>]], [[gethostbyname ("");]])], [], [LIBS=$OLD_LIBS])
+AC_CHECK_FUNC(gethostbyname,[SOCKETS_AVAILABLE=1])
+AS_IF([test "$SOCKETS_AVAILABLE" = ""],[
+  OLD_LIBS=$LIBS
+  LIBS+=" -lws2"
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <winsock2.h>]], [[gethostbyname ("");]])], [SOCKETS_AVAILABLE=1], [LIBS=$OLD_LIBS])
+])
+AS_IF([test "$SOCKETS_AVAILABLE" = ""],[
+  OLD_LIBS=$LIBS
+  LIBS+=" -lws2_32"
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <winsock2.h>]], [[gethostbyname ("");]])], [SOCKETS_AVAILABLE=1], [LIBS=$OLD_LIBS])
+])
 
 #output
 AC_CONFIG_FILES([Makefile]
