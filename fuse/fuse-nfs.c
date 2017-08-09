@@ -69,14 +69,14 @@ uid_t getuid(){
 
 static int map_uid(int possible_uid) {
     if (custom_uid != -1 && possible_uid == custom_uid){
-        return getuid();
+        return fuse_get_context()->uid;
     }
     return possible_uid;
 }
 
 static int map_gid(int possible_gid) {
     if (custom_gid != -1 && possible_gid == custom_gid){
-        return getgid();
+        return fuse_get_context()->gid;
     }
     return possible_gid;
 }
