@@ -47,7 +47,7 @@ if test x"$libiscsi_cv_HAVE_ST_ATIM" = x"yes"; then
     AC_DEFINE(HAVE_ST_ATIM,1,[Whether we have st_atim support])
 fi
 
-AC_SEARCH_LIBS([fuse_get_context], [fuse dokanfuse1.dll], [], [
+AC_SEARCH_LIBS([fuse_get_context], [fuse dokanfuse1.dll dokanfuse2.dll], [], [
   AC_MSG_ERROR([fuse library unavailable])
 ])
 
