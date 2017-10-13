@@ -510,19 +510,19 @@ int main(int argc, char *argv[])
 
 	char *nfs_uid = NULL;
 	char *nfs_gid = NULL;
-	char fuse_uid_arg[32];
-	char fuse_gid_arg[32];
-	char fuse_fsname_arg[1024];
-	char fuse_subtype_arg[1024];
-	char fuse_max_write_arg[32];
-	char fuse_max_read_arg[32];
-	char fuse_max_readahead_arg[32];
-	char fuse_Umask_arg[32];
-	char fuse_entry_timeout_arg[32];
-	char fuse_negative_timeout_arg[32];
-	char fuse_attr_timeout_arg[32];
-	char fuse_ac_attr_timeout_arg[32];
-	char fuse_intr_signal_arg[32];
+	char fuse_uid_arg[32] = {0};
+	char fuse_gid_arg[32] = {0};
+	char fuse_fsname_arg[1024] = {0};
+	char fuse_subtype_arg[1024] = {0};
+	char fuse_max_write_arg[32] = {0};
+	char fuse_max_read_arg[32] = {0};
+	char fuse_max_readahead_arg[32] = {0};
+	char fuse_Umask_arg[32] = {0};
+	char fuse_entry_timeout_arg[32] = {0};
+	char fuse_negative_timeout_arg[32] = {0};
+	char fuse_attr_timeout_arg[32] = {0};
+	char fuse_ac_attr_timeout_arg[32] = {0};
+	char fuse_intr_signal_arg[32] = {0};
 
 	struct nfs_url *urls = NULL;
 
@@ -775,7 +775,7 @@ int main(int argc, char *argv[])
 	}
 
 	fuse_nfs_argv[1] = mnt;
-	return fuse_main(fuse_nfs_argc, fuse_nfs_argv, &nfs_oper, NULL);
+	ret = fuse_main(fuse_nfs_argc, fuse_nfs_argv, &nfs_oper, NULL);
 
 finished:
 	nfs_destroy_url(urls);
