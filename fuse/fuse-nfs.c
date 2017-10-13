@@ -508,21 +508,19 @@ int main(int argc, char *argv[])
 	char *mnt = NULL;
 	char *idstr = NULL;
 
-	char *nfs_uid = NULL;
-	char *nfs_gid = NULL;
-	char fuse_uid_arg[32];
-	char fuse_gid_arg[32];
-	char fuse_fsname_arg[1024];
-	char fuse_subtype_arg[1024];
-	char fuse_max_write_arg[32];
-	char fuse_max_read_arg[32];
-	char fuse_max_readahead_arg[32];
-	char fuse_Umask_arg[32];
-	char fuse_entry_timeout_arg[32];
-	char fuse_negative_timeout_arg[32];
-	char fuse_attr_timeout_arg[32];
-	char fuse_ac_attr_timeout_arg[32];
-	char fuse_intr_signal_arg[32];
+	char fuse_uid_arg[32] = {0};
+	char fuse_gid_arg[32] = {0};
+	char fuse_fsname_arg[1024] = {0};
+	char fuse_subtype_arg[1024] = {0};
+	char fuse_max_write_arg[32] = {0};
+	char fuse_max_read_arg[32] = {0};
+	char fuse_max_readahead_arg[32] = {0};
+	char fuse_Umask_arg[32] = {0};
+	char fuse_entry_timeout_arg[32] = {0};
+	char fuse_negative_timeout_arg[32] = {0};
+	char fuse_attr_timeout_arg[32] = {0};
+	char fuse_ac_attr_timeout_arg[32] = {0};
+	char fuse_intr_signal_arg[32] = {0};
 
 	struct nfs_url *urls = NULL;
 
@@ -578,29 +576,27 @@ int main(int argc, char *argv[])
 			url = strdup(optarg);
 			break;
 		case 'U':
-			nfs_uid = strdup(optarg);
-			custom_uid=atoi(nfs_uid);
+			custom_uid=atoi(optarg);
 			break;
 		case 'G':
-			nfs_gid = strdup(optarg);
-			custom_gid=atoi(nfs_gid);
+			custom_gid=atoi(optarg);
 			break;
 		case 'u':
-			snprintf(fuse_uid_arg, sizeof(fuse_uid_arg), "-ouid=%s", strdup(optarg));
+			snprintf(fuse_uid_arg, sizeof(fuse_uid_arg), "-ouid=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_uid_arg;
 			break;
 		case 'g':
-			snprintf(fuse_gid_arg, sizeof(fuse_gid_arg), "-ogid=%s", strdup(optarg));
+			snprintf(fuse_gid_arg, sizeof(fuse_gid_arg), "-ogid=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_gid_arg;
 			break;
 		case 'D':
 			fuse_nfs_argv[fuse_nfs_argc++] = "-odebug";
 			break;
 		case 'p':
-			fuse_default_permissions=atoi(strdup(optarg));
+			fuse_default_permissions=atoi(optarg);
 			break;
 		case 't':
-			fuse_multithreads=atoi(strdup(optarg));
+			fuse_multithreads=atoi(optarg);
 			break;
 		case 'd':
 			fuse_nfs_argv[fuse_nfs_argc++] = "-odirect_io";
@@ -621,11 +617,11 @@ int main(int argc, char *argv[])
 			fuse_nfs_argv[fuse_nfs_argc++] = "-ohard_remove";
 			break;
 		case 'f':
-			snprintf(fuse_fsname_arg, sizeof(fuse_fsname_arg), "-ofsname=%s", strdup(optarg));
+			snprintf(fuse_fsname_arg, sizeof(fuse_fsname_arg), "-ofsname=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_fsname_arg;
 			break;
 		case 's':
-			snprintf(fuse_subtype_arg, sizeof(fuse_subtype_arg), "-osubtype=%s", strdup(optarg));
+			snprintf(fuse_subtype_arg, sizeof(fuse_subtype_arg), "-osubtype=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_subtype_arg;
 			break;
 		case 'b':
@@ -635,15 +631,15 @@ int main(int argc, char *argv[])
 			fuse_nfs_argv[fuse_nfs_argc++] = "-ointr";
 			break;
 		case 'R':
-			snprintf(fuse_max_read_arg, sizeof(fuse_max_read_arg), "-omax_read=%s", strdup(optarg));
+			snprintf(fuse_max_read_arg, sizeof(fuse_max_read_arg), "-omax_read=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_read_arg;
 			break;
 		case 'W':
-			snprintf(fuse_max_write_arg, sizeof(fuse_max_write_arg), "-omax_write=%s", strdup(optarg));
+			snprintf(fuse_max_write_arg, sizeof(fuse_max_write_arg), "-omax_write=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_write_arg;
 			break;
 		case 'H':
-			snprintf(fuse_max_readahead_arg, sizeof(fuse_max_readahead_arg), "-omax_readahead=%s", strdup(optarg));
+			snprintf(fuse_max_readahead_arg, sizeof(fuse_max_readahead_arg), "-omax_readahead=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_readahead_arg;
 			break;
 		case 'A':
@@ -653,23 +649,23 @@ int main(int argc, char *argv[])
 			fuse_nfs_argv[fuse_nfs_argc++] = "-osync_read";
 			break;
 		case 'K':
-			snprintf(fuse_Umask_arg, sizeof(fuse_Umask_arg), "-oumask=%s", strdup(optarg));
+			snprintf(fuse_Umask_arg, sizeof(fuse_Umask_arg), "-oumask=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_Umask_arg;
 			break;
 		case 'E':
-			snprintf(fuse_entry_timeout_arg, sizeof(fuse_entry_timeout_arg), "-oentry_timeout=%s", strdup(optarg));
+			snprintf(fuse_entry_timeout_arg, sizeof(fuse_entry_timeout_arg), "-oentry_timeout=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_entry_timeout_arg;
 			break;
 		case 'N':
-			snprintf(fuse_negative_timeout_arg, sizeof(fuse_negative_timeout_arg), "-onegative_timeout=%s", strdup(optarg));
+			snprintf(fuse_negative_timeout_arg, sizeof(fuse_negative_timeout_arg), "-onegative_timeout=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_negative_timeout_arg;
 			break;
 		case 'T':
-			snprintf(fuse_attr_timeout_arg, sizeof(fuse_attr_timeout_arg), "-oattr_timeout=%s", strdup(optarg));
+			snprintf(fuse_attr_timeout_arg, sizeof(fuse_attr_timeout_arg), "-oattr_timeout=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_attr_timeout_arg;
 			break;
 		case 'C':
-			snprintf(fuse_ac_attr_timeout_arg, sizeof(fuse_ac_attr_timeout_arg), "-oac_attr_timeout=%s", strdup(optarg));
+			snprintf(fuse_ac_attr_timeout_arg, sizeof(fuse_ac_attr_timeout_arg), "-oac_attr_timeout=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_ac_attr_timeout_arg;
 			break;
 		case 'o':
@@ -679,7 +675,7 @@ int main(int argc, char *argv[])
 			fuse_nfs_argv[fuse_nfs_argc++] = "-ononempty";
 			break;
 		case 'I':
-			snprintf(fuse_intr_signal_arg, sizeof(fuse_intr_signal_arg), "-ointr_signal=%s", strdup(optarg));
+			snprintf(fuse_intr_signal_arg, sizeof(fuse_intr_signal_arg), "-ointr_signal=%s", optarg);
 			fuse_nfs_argv[fuse_nfs_argc++] = fuse_intr_signal_arg;
 			break;
 		case 'q':
@@ -775,7 +771,7 @@ int main(int argc, char *argv[])
 	}
 
 	fuse_nfs_argv[1] = mnt;
-	return fuse_main(fuse_nfs_argc, fuse_nfs_argv, &nfs_oper, NULL);
+	ret = fuse_main(fuse_nfs_argc, fuse_nfs_argv, &nfs_oper, NULL);
 
 finished:
 	nfs_destroy_url(urls);
