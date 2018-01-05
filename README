@@ -1,7 +1,7 @@
 fuse-nfs
 ========
 
-This is a fuse module that implements the NFSv3 protocol.
+This is a fuse module that implements the NFS protocol.
 
 Building
 ========
@@ -137,6 +137,7 @@ Arguments supported by libnfs are :
 					automatically or not. Default is 1 == enabled.
  dircache=<0|1>    : Disable/enable directory caching. Enabled by default.
  if=<interface>    : Interface name (e.g., eth1) to bind; requires `root`
+ version=<3|4>     : NFS version to use. Version 3 is the default.
 
 
 To mount a filesystem:
@@ -147,6 +148,13 @@ fuse-nfs -n nfs://127.0.0.1/data/tmp -m /my/mountpoint
 To unmount a filesystem:
 ========================
 fusermount -u /my/mountpoint
+
+
+NFSv4 support:
+==============
+NFSv4 is supported when used with a recent enough version of libnfs.
+To enable NFSv4 support you need to specify version=4 as an URL argument:
+fuse-nfs -n nfs://127.0.0.1/data/tmp?version=4 -m /my/mountpoint
 
 
 Windows
