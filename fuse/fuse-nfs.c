@@ -169,20 +169,22 @@ generic_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
  * have are overriding the credentials via url arguments.
  */
 static void update_rpc_credentials(void) {
-	if ((custom_uid == -1 || fuse_get_context()->uid != mount_user_uid) && fusenfs_allow_other_own_ids)
-	{
+	if (custom_uid == -1  && !fusenfs_allow_other_own_ids) {
 		nfs_set_uid(nfs, fuse_get_context()->uid);
-	}
-	else
-	{
+	} else if ((custom_uid == -1 ||
+                    fuse_get_context()->uid != mount_user_uid)
+                   && fusenfs_allow_other_own_ids) {
+		nfs_set_uid(nfs, fuse_get_context()->uid);
+	} else {
 		nfs_set_uid(nfs, custom_uid);
 	}
-	if ((custom_gid == -1 || fuse_get_context()->gid != mount_user_gid) && fusenfs_allow_other_own_ids)
-	{
+	if (custom_gid == -1 && !fusenfs_allow_other_own_ids) {
 		nfs_set_gid(nfs, fuse_get_context()->gid);
-	}
-	else 
-	{
+        } else if ((custom_gid == -1 ||
+                    fuse_get_context()->gid != mount_user_gid)
+                   && fusenfs_allow_other_own_ids) {
+		nfs_set_gid(nfs, fuse_get_context()->gid);
+	} else {
 		nfs_set_gid(nfs, custom_gid);
 	}
 }
@@ -496,6 +498,8 @@ static int fuse_nfs_utime(const char *path, struct utimbuf *times)
 	ret = nfs_utime_async(nfs, path, times, generic_cb, &cb_data);
 	pthread_mutex_unlock(&nfs_mutex);
 	if (ret < 0) {
+                LOG("fuse_nfs_utime returned %d. %s\n", ret,
+                    nfs_get_error(nfs));
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
