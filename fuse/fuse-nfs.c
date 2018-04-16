@@ -29,7 +29,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#ifndef WIN32
 #include <poll.h>
+#endif
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -37,6 +39,7 @@
 
 #ifdef WIN32
 #include <winsock2.h>
+#include <win32/win32_compat.h>
 #endif
 
 #ifndef FUSE_STAT
