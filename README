@@ -15,78 +15,29 @@ $ sudo make install
 FUSE OPTIONS
 ============
 
-	[-?|--help]
+usage: fuse-nfs [options] share mountpoint
 
-	fuse-nfs options :
-	[-U NFS_UID|--fusenfs_uid=NFS_UID]
-		The uid passed within the rpc credentials within the mount point
-		This is the same as passing the uid within the url, however if both are defined then the url's one is used
-	[-G NFS_GID|--fusenfs_gid=NFS_GID]
-		The gid passed within the rpc credentials within the mount point
-		This is the same as passing the gid within the url, however if both are defined then the url's one is used
-	[-o|--fusenfs_allow_other_own_ids]
-		Allow fuse-nfs with allow_user activated to update the rpc credentials with the current (other) user credentials instead
-		of using the mount user credentials or (if defined) the custom credentials defined with -U/-G / url
-		This option activate allow_other, note that allow_other need user_allow_other to be defined in fuse.conf
+	 [-?|-h|--help]
 
-	libnfs options :
-	[-n SHARE|--nfs_share=SHARE]
-		The server export to be mounted
-	[-m MNTPOINT|--mountpoint=MNTPOINT]
-		The client mount point
+fuse-nfs options:
 
-	fuse options (see man mount.fuse):
-	[-p [0|1]|--default_permissions=[0|1]
-		The fuse default_permissions option do not have any argument, 
-		for compatibility with previous fuse-nfs version default is activated (1)
-		with the possibility to overwrite this behavior (0)
-	[-t [0|1]|--multithread=[0|1]]
-		Single threaded by default (0) , may have issue with nfs and fuse multithread (1)
-	[-a|--allow_other]
-		This option overrides the security measure restricting file access to the filesystem owner, 
-		so that all users (including root) can access the files.
-	[-r|--allow_root]
-		This option is similar to allow_other but file access is limited to the filesystem owner and root.  
-		This option and allow_other are mutually exclusive.
-	[-u FUSE_UID|--uid=FUSE_UID]
-		Specifies the numeric uid of the mount owner. 
-		Override the st_uid field set by the filesystem.
-	[-g FUSE_GID|--gid=FUSE_GID]
-		Specifies the numeric gid of the mount owner.
-		Override the st_uid field set by the filesystem.
-	[-U UMASK|--umask=UMASK]
-		Override the permission bits in st_mode set by the filesystem. 
-		The resulting permission bits are the ones missing from the given umask value.  
-		The value is given in octal representation.
-	[-d|--direct_io]
-		This option disables the use of page cache (file content  cache) in the kernel for this filesystem. 
-		This has several affects:
-		       1.	Each read or write system call will initiate one or more read or write operations, data will not be cached in the kernel.
-		       2.	The return value of the read and write system calls will correspond to the return values of the read and write operations. 
-		       		This is useful for example if the file size is not known in advance (before reading it).
-	[-k|--kernel_cache]
-		This option disables flushing the cache of the file contents on every open.
-		This should only be enabled on filesystems, where the file data is never changed externally (not through the mounted FUSE filesystem).  
-		Thus it is not suitable for network filesystems and other "intermediate" filesystems.
-	[-c|--auto_cache]
-		This option is an alternative to kernel_cache. 
-		Instead of unconditionally keeping cached data, the cached data is invalidated on open if the modification time or the size of the file has changed since it was last opened.
-	[-E TIMEOUT|--entry_timeout=TIMEOUT]
-		The timeout in seconds for which name lookups will be cached.
-		The default is 1.0 second. For all the timeout options, it is possible to give fractions of a second as well (e.g. entry_timeout=2.8)
-	[-N TIMEOUT|--negative_timeout=TIMEOUT]
-		The timeout in seconds for which a negative lookup will be cached.
-		This means, that if file did not exist (lookup retuned ENOENT), the lookup will only be redone after the timeout, and the file/directory will be assumed to not exist until then.
-		The default is 0.0 second, meaning that caching negative lookups are disabled.		
-	[-T TIMEOUT|--attr_timeout=TIMEOUT]
-		The timeout in seconds for which file/directory attributes are cached. 
-		The default is 1.0 second.
-	[-C TIMEOUT|--ac_attr_timeout=TIMEOUT]
-		The timeout in seconds for which file attributes are cached for the purpose of checking if auto_cache should flush the file data on open. 
-		The default is the value of attr_timeout
-	[-l|--large_read]
-		This can improve performance for some filesystems, but can also degrade performance. 
-		This option is only useful on 2.4.X kernels, as on 2.6 kernels requests size is automatically determined for optimum performance.
+	 share
+		 The server export to be mounted
+	 mountpoint
+		 The directory to mount the nfs share on
+
+	 [-U NFS_UID|-o fusenfs_uid=NFS_UID]
+		 The uid passed within the rpc credentials within the mount point
+		 This is the same as passing the uid within the url, however if both are defined then the url's one is used
+	 [-G NFS_GID|-o fusenfs_gid=NFS_GID]
+		 The gid passed within the rpc credentials within the mount point
+		 This is the same as passing the gid within the url, however if both are defined then the url's one is used
+	 [-A|-o fusenfs_allow_other_own_ids]
+		 Allow fuse-nfs with allow_user activated to update the rpc credentials with the current (other) user credentials instead
+		 of using the mount user credentials or (if defined) the custom credentials defined with -U/-G / url
+		 This option activate allow_other, note that allow_other need user_allow_other to be defined in fuse.conf
+
+fuse options: See man mount.fuse for those options.
 
 ROOT vs NON-ROOT
 ================
