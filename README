@@ -6,7 +6,7 @@ This is a fuse module that implements the NFS protocol.
 Building
 ========
 
-$ sudo apt-get install libfuse-dev libnfs1 libtool m4 automake libnfs-dev
+$ sudo apt-get install libfuse-dev libnfs13 libnfs-dev libtool m4 automake libnfs-dev xsltproc
 $ ./setup.sh
 $ ./configure
 $ make
