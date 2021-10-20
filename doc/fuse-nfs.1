@@ -1,0 +1,160 @@
+'\" t
+.\"     Title: fuse-nfs
+.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 10/20/2021
+.\"    Manual: fuse-nfs
+.\"    Source: fuse-nfs
+.\"  Language: English
+.\"
+.TH "FUSE\-NFS" "1" "10/20/2021" "fuse\-nfs" "fuse\-nfs"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+fuse-nfs \- A FUSE filesystem for NFS
+.SH "SYNOPSIS"
+.HP \w'\fBfuse\-nfs\ [\ OPTIONS\ ]\fR\ 'u
+\fBfuse\-nfs [ OPTIONS ]\fR
+.HP \w'\fBfuse\-nfs\fR\ 'u
+\fBfuse\-nfs\fR [\-n\ \-\-nfs\-share=<NFS\-URL>] [\-m\ \-\-mountpoint=<path>] [\-a\ \-\-allow\-other] [\-?\ \-\-help] [\-\-usage]
+.SH "DESCRIPTION"
+.PP
+fuse\-nfs is a FUSE filesystem that implements the NFS protocol\&.
+.PP
+Example: Mounting a filesystem
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ fuse\-nfs \-n nfs://127\&.0\&.0\&.1/data/tmp \-m /data/sahlberg/foo
+      
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+Example: Unounting a filesystem
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ fusermount \-u /data/sahlberg/foo
+      
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.SH "OPTIONS"
+.PP
+\-a \-\-allow\-user
+.RS 4
+By default, only the user that mounted the FUSE filesystem will be able to access it\&. Use this argument to make the filesystem accessible to all users\&.
+.RE
+.PP
+\-n \-\-nfs\-share=<NFS\-URL>
+.RS 4
+Specify the server/export to mount\&.
+.RE
+.PP
+\-m \-\-mountpoint=<path>
+.RS 4
+The local mountpoint to use\&.
+.RE
+.PP
+\-? \-\-help
+.RS 4
+Display basic help text\&.
+.RE
+.PP
+\-\-usage
+.RS 4
+Display basic usage text\&.
+.RE
+.SH "NFS\-URL"
+.PP
+Libnfs uses RFC2224 style URLs extended with libnfs specific url arguments and some minor extensions\&. The basic syntax of these URLs is
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+	nfs://<server|ipv4|ipv6>/path[?arg=val[&arg=val]*]
+      
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+
+.PP
+URL Arguments:
+.PP
+tcp\-syncnt=<int>
+.RS 4
+Number of SYNs to send during the session establish before failing setting up the tcp connection to the server\&.
+.RE
+.PP
+uid=<int>
+.RS 4
+UID value to use when talking to the server\&. default it 65534 on Windows and getuid() on unixen\&.
+.RE
+.PP
+gid=<int>
+.RS 4
+GID value to use when talking to the server\&. default it 65534 on Windows and getgid() on unixen\&.
+.RE
+.PP
+readahead=<int>
+.RS 4
+Enable readahead for files and set the maximum amount of readahead to <int>\&.
+.RE
+.PP
+auto\-traverse\-mounts=<0|1>
+.RS 4
+Should libnfs try to traverse across nested mounts automatically or not\&. Default is 1 == enabled\&.
+.RE
+.SH "ROOT VS NON\-ROOT"
+.PP
+NFS servers by default restrict access to only those clients that connect from a systems port, i\&.e\&. a port number less than 1024\&. In Un*x access to these ports are traditionally reserved to the root user which means that a non\-root user will normally not be able to use fuse\-nfs to access an NFS share\&.
+.PP
+There are two ways to solve this and allow non\-root users to use fuse\-nfs:
+.SS "cap_net_bind_service"
+.PP
+Adding this capability to the fuse\-nfs binary the linux kernel will now allow the use of systems port for any user of this binary which will allow fuse\-nfs to connect to the server\&.
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+$ sudo setcap \*(Aqcap_net_bind_service=+ep\*(Aq fuse\-nfs
+    
+.fi
+.if n \{\
+.RE
+.\}
+.SS "insecure mode"
+.PP
+Alternatively you can disable the check in the NFS server that blocks non\-system ports from connecting\&. In Linux NFS servers this is done by adding the "insecure" option to /etc/exports
+.SH "SEE ALSO"
+.PP
+\m[blue]\fB\%http://github.com/sahlberg/libnfs\fR\m[]
