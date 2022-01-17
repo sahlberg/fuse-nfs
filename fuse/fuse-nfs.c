@@ -329,6 +329,7 @@ fuse_nfs_readlink(const char *path, char *buf, size_t size)
 	LOG("fuse_nfs_readlink entered [%s]\n", path);
 
         memset(&cb_data, 0, sizeof(struct sync_cb_data));
+	*buf = 0;
 	cb_data.return_data = buf;
 	cb_data.max_size = size;
 
