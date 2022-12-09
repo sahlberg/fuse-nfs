@@ -866,7 +866,7 @@ void print_usage(char *name)
 			"\t [-r|--allow_root] \n"
 			"\t [-u FUSE_UID|--uid=FUSE_UID] \n"
 			"\t [-g FUSE_GID|--gid=FUSE_GID] \n"
-			"\t [-U UMASK|--umask=UMASK] \n"
+			"\t [-K UMASK|--umask=UMASK] \n"
 			"\t [-d|--direct_io] \n"
 			"\t [-k|--kernel_cache] \n"
 			"\t [-c|--auto_cache] \n"
@@ -934,7 +934,7 @@ int main(int argc, char *argv[])
 		{ "max_readahead", required_argument, 0, 'H' },
 		{ "async_read", no_argument, 0, 'A' },
 		{ "sync_read", no_argument, 0, 'S' },
-		{ "umask", required_argument, 0, 'U' },
+		{ "umask", required_argument, 0, 'K' },
 		{ "entry_timeout", required_argument, 0, 'E' },
 		{ "negative_timeout", required_argument, 0, 'N' },
 		{ "attr_timeout", required_argument, 0, 'T' },
