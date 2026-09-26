@@ -591,11 +591,13 @@ static int fuse_nfs_write(const char *path, const char *buf, size_t size,
 static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	struct sync_cb_data cb_data;
+	struct sync_cb_data chmod_cb;
+	struct nfsfh *nfsfh;
 	int ret = 0;
 
 	LOG("fuse_nfs_create entered [%s]\n", path);
 
-        memset(&cb_data, 0, sizeof(struct sync_cb_data));
+	memset(&cb_data, 0, sizeof(struct sync_cb_data));
 
 	pthread_mutex_lock(&nfs_mutex);
 	update_rpc_credentials();
@@ -605,10 +607,30 @@ static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info 
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
+	if (cb_data.status < 0) {
+		return cb_data.status;
+	}
 
-	fi->fh = (uint64_t)cb_data.return_data;
-	
-	return cb_data.status;
+	nfsfh = cb_data.return_data;
+	fi->fh = (uint64_t)nfsfh;
+
+	memset(&chmod_cb, 0, sizeof(chmod_cb));
+	pthread_mutex_lock(&nfs_mutex);
+	update_rpc_credentials();
+	ret = nfs_fchmod_async(nfs, nfsfh, mode, generic_cb, &chmod_cb);
+	pthread_mutex_unlock(&nfs_mutex);
+	if (ret < 0) {
+		fuse_nfs_release(path, fi);
+		return ret;
+	}
+	wait_for_nfs_reply(nfs, &chmod_cb);
+	if (chmod_cb.status < 0) {
+		LOG("fuse_nfs_create failed to chmod %s\n", nfs_get_error(nfs));
+		fuse_nfs_release(path, fi);
+		return chmod_cb.status;
+	}
+
+	return chmod_cb.status;
 }
 
 static int fuse_nfs_utime(const char *path, struct utimbuf *times)
