@@ -524,6 +524,10 @@ read_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 	if (status < 0) {
 		return;
 	}
+
+#ifndef LIBNFS_API_V2
+	memcpy(cb_data->return_data, data, status);
+#endif
 }
 
 static int
@@ -543,6 +547,7 @@ fuse_nfs_read(const char *path, char *buf, size_t size,
 #ifdef LIBNFS_API_V2
 	ret = nfs_pread_async(nfs, nfsfh, buf, size, offset, read_cb, &cb_data);
 #else
+	cb_data.return_data = buf;
 	ret = nfs_pread_async(nfs, nfsfh, offset, size, read_cb, &cb_data);
 #endif
 	pthread_mutex_unlock(&nfs_mutex);
