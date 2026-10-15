@@ -717,6 +717,9 @@ fuse_nfs_mkdir(const char *path, mode_t mode)
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
+	if (cb_data.status < 0) {
+		return cb_data.status;
+	}
 
 	cb_data.is_finished = 0;
 
