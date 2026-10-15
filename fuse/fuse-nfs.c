@@ -1118,7 +1118,7 @@ int main(int argc, char *argv[])
 	struct nfs_url *urls = NULL;
 
 	int fuse_nfs_argc = 2;
-	char *fuse_nfs_argv[34] = {
+	char *fuse_nfs_argv[35] = {
 		"fuse-nfs",
 		"<export>",
 		NULL,
@@ -1333,6 +1333,7 @@ int main(int argc, char *argv[])
 		snprintf(fuse_max_write_arg, sizeof(fuse_max_write_arg), "-omax_write=%s", "32768");
 		fuse_nfs_argv[fuse_nfs_argc++] = fuse_max_write_arg;
 	}
+	fuse_nfs_argv[fuse_nfs_argc++] = "-obig_writes";
 
 	/* Only for compatibility with previous version */
 	if (fuse_default_permissions){fuse_nfs_argv[fuse_nfs_argc++] = "-odefault_permissions";}
