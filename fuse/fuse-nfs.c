@@ -456,6 +456,16 @@ fuse_nfs_readlink(const char *path, char *buf, size_t size)
 	return cb_data.status;
 }
 
+/*
+ * One per open file. Writes mark it dirty and a successful COMMIT marks it
+ * clean, so close only waits for a COMMIT when there is something to
+ * commit, like the kernel NFS client.
+ */
+struct fuse_nfs_file {
+	struct nfsfh *nfsfh;
+	int dirty;
+};
+
 static void
 open_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
@@ -476,9 +486,15 @@ static int
 fuse_nfs_open(const char *path, struct fuse_file_info *fi)
 {
 	struct sync_cb_data cb_data;
+	struct fuse_nfs_file *file;
 	int ret;
 
 	LOG("fuse_nfs_open entered [%s]\n", path);
+
+	file = calloc(1, sizeof(*file));
+	if (file == NULL) {
+		return -ENOMEM;
+	}
 
         memset(&cb_data, 0, sizeof(struct sync_cb_data));
 
@@ -489,11 +505,17 @@ fuse_nfs_open(const char *path, struct fuse_file_info *fi)
         ret = nfs_open_async(nfs, path, fi->flags, open_cb, &cb_data);
 	pthread_mutex_unlock(&nfs_mutex);
 	if (ret < 0) {
+		free(file);
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
+	if (cb_data.status < 0) {
+		free(file);
+		return cb_data.status;
+	}
 
-	fi->fh = (uint64_t)cb_data.return_data;
+	file->nfsfh = cb_data.return_data;
+	fi->fh = (uint64_t)file;
 
 	return cb_data.status;
 }
@@ -501,14 +523,15 @@ fuse_nfs_open(const char *path, struct fuse_file_info *fi)
 static int fuse_nfs_release(const char *path, struct fuse_file_info *fi)
 {
 	struct sync_cb_data cb_data;
-	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
+	struct fuse_nfs_file *file = (struct fuse_nfs_file *)fi->fh;
 
         memset(&cb_data, 0, sizeof(struct sync_cb_data));
 
 	pthread_mutex_lock(&nfs_mutex);
-	nfs_close_async(nfs, nfsfh, generic_cb, &cb_data);
+	nfs_close_async(nfs, file->nfsfh, generic_cb, &cb_data);
 	pthread_mutex_unlock(&nfs_mutex);
 	wait_for_nfs_reply(nfs, &cb_data);
+	free(file);
 
 	return 0;
 }
@@ -534,7 +557,8 @@ static int
 fuse_nfs_read(const char *path, char *buf, size_t size,
 	      off_t offset, struct fuse_file_info *fi)
 {
-	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
+	struct fuse_nfs_file *file = (struct fuse_nfs_file *)fi->fh;
+	struct nfsfh *nfsfh = file->nfsfh;
 	struct sync_cb_data cb_data;
 	int ret;
 
@@ -562,7 +586,8 @@ fuse_nfs_read(const char *path, char *buf, size_t size,
 static int fuse_nfs_write(const char *path, const char *buf, size_t size,
        off_t offset, struct fuse_file_info *fi)
 {
-	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
+	struct fuse_nfs_file *file = (struct fuse_nfs_file *)fi->fh;
+	struct nfsfh *nfsfh = file->nfsfh;
 	struct sync_cb_data cb_data;
 	int ret;
 
@@ -572,6 +597,7 @@ static int fuse_nfs_write(const char *path, const char *buf, size_t size,
 
 	pthread_mutex_lock(&nfs_mutex);
         update_rpc_credentials();
+	file->dirty = 1;
 #ifdef LIBNFS_API_V2
 	ret = nfs_pwrite_async(nfs, nfsfh, discard_const(buf), size, offset,
 			       generic_cb, &cb_data);
@@ -592,10 +618,16 @@ static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info 
 {
 	struct sync_cb_data cb_data;
 	struct sync_cb_data chmod_cb;
+	struct fuse_nfs_file *file;
 	struct nfsfh *nfsfh;
 	int ret = 0;
 
 	LOG("fuse_nfs_create entered [%s]\n", path);
+
+	file = calloc(1, sizeof(*file));
+	if (file == NULL) {
+		return -ENOMEM;
+	}
 
 	memset(&cb_data, 0, sizeof(struct sync_cb_data));
 
@@ -604,15 +636,18 @@ static int fuse_nfs_create(const char *path, mode_t mode, struct fuse_file_info 
 	ret = nfs_creat_async(nfs, path, mode, open_cb, &cb_data);
 	pthread_mutex_unlock(&nfs_mutex);
 	if (ret < 0) {
+		free(file);
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
 	if (cb_data.status < 0) {
+		free(file);
 		return cb_data.status;
 	}
 
 	nfsfh = cb_data.return_data;
-	fi->fh = (uint64_t)nfsfh;
+	file->nfsfh = nfsfh;
+	fi->fh = (uint64_t)file;
 
 	memset(&chmod_cb, 0, sizeof(chmod_cb));
 	pthread_mutex_lock(&nfs_mutex);
@@ -886,28 +921,66 @@ static int fuse_nfs_truncate(const char *path, off_t size)
 	return cb_data.status;
 }
 
+/* A COMMIT that fails leaves the file dirty, so the next close retries it. */
 static int
-fuse_nfs_fsync(const char *path, int isdatasync,
-	       struct fuse_file_info *fi)
+commit_file(struct fuse_nfs_file *file)
 {
-	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
 	struct sync_cb_data cb_data;
 	int ret;
-
-	LOG("fuse_nfs_fsync entered [%s]\n", path);
 
         memset(&cb_data, 0, sizeof(struct sync_cb_data));
 
 	pthread_mutex_lock(&nfs_mutex);
 	update_rpc_credentials();
-        ret = nfs_fsync_async(nfs, nfsfh, generic_cb, &cb_data);
+	file->dirty = 0;
+        ret = nfs_fsync_async(nfs, file->nfsfh, generic_cb, &cb_data);
+	if (ret < 0) {
+		file->dirty = 1;
+	}
 	pthread_mutex_unlock(&nfs_mutex);
 	if (ret < 0) {
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
-	
+	if (cb_data.status < 0) {
+		pthread_mutex_lock(&nfs_mutex);
+		file->dirty = 1;
+		pthread_mutex_unlock(&nfs_mutex);
+	}
+
 	return cb_data.status;
+}
+
+static int
+fuse_nfs_fsync(const char *path, int isdatasync,
+	       struct fuse_file_info *fi)
+{
+	LOG("fuse_nfs_fsync entered [%s]\n", path);
+
+	return commit_file((struct fuse_nfs_file *)fi->fh);
+}
+
+/*
+ * Called on every close(2), which returns what this returns. Commit the
+ * writes made through this open file, so that close fails if the server
+ * lost them, for example when it restarted or another server took over.
+ */
+static int
+fuse_nfs_flush(const char *path, struct fuse_file_info *fi)
+{
+	struct fuse_nfs_file *file = (struct fuse_nfs_file *)fi->fh;
+	int dirty;
+
+	LOG("fuse_nfs_flush entered [%s]\n", path);
+
+	pthread_mutex_lock(&nfs_mutex);
+	dirty = file->dirty;
+	pthread_mutex_unlock(&nfs_mutex);
+	if (!dirty) {
+		return 0;
+	}
+
+	return commit_file(file);
 }
 
 static void
@@ -965,6 +1038,7 @@ static struct fuse_operations nfs_oper = {
 	.chmod		= fuse_nfs_chmod,
 	.chown		= fuse_nfs_chown,
 	.create		= fuse_nfs_create,
+	.flush		= fuse_nfs_flush,
 	.fsync		= fuse_nfs_fsync,
 	.getattr	= fuse_nfs_getattr,
 	.link		= fuse_nfs_link,
