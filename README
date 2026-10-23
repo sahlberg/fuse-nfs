@@ -26,6 +26,21 @@ The thread starts in the FUSE init callback, after daemonization, and is
 joined before the NFS context is destroyed. It uses the existing async API,
 not libnfs's optional multithreading API.
 
+Daemon diagnostics
+------------------
+
+-L FILE records UTC timestamps, daemon startup and exit, and fatal NFS
+initialization, mount, and service errors. Service failures include the RPC
+diagnostic, socket descriptors, poll flags, and poll errors (Winsock codes
+on Windows). Fatal messages are written and flushed to stderr before
+attempting the optional logfile, so a blocked logfile cannot suppress the
+stderr diagnostic.
+Logfile writes remain synchronous.
+
+These diagnostics use existing libnfs APIs and do not require a libnfs
+patch. Negative nfs_service() results remain fatal; per-operation errors
+continue to be returned to their callers.
+
 FUSE OPTIONS
 ============
 
