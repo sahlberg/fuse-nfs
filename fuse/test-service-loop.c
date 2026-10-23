@@ -1,3 +1,5 @@
+/* This test uses assertions with side effects; keep them active in all builds. */
+#undef NDEBUG
 /* Exercise the real FUSE event loop without a server or a FUSE mount. */
 #ifdef WIN32
 int main(void) { return 77; } /* POSIX signals and fork are used by this test. */

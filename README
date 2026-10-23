@@ -186,3 +186,11 @@ The following are ports to windows:
 
   The NFS-Win port (including MSI installers) can be found here:
   https://github.com/billziss-gh/nfs-win
+
+Failed metadata requests
+------------------------
+
+Failed getattr and statfs requests return their operation error without
+modifying the output structure. Failed readdir requests return before using
+the directory handle. The focused test checks ENOENT, EACCES, and submission
+failure followed by successful requests on the same context.
