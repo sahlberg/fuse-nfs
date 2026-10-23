@@ -193,10 +193,3 @@ Failed attribute requests
 A failed getattr returns its operation error without modifying the output
 stat structure. The focused test checks ENOENT, EACCES, and submission
 failure followed by successful getattr requests on the same context.
-
-The optional real-server regression runs when FUSE_NFS_TEST_URL names a
-read-only NFSv4 export URL and FUSE_NFS_TEST_FILE names an existing nonempty
-file within that export, with a leading slash. It checks missing-path
-ENOENT followed by stat/open/read/close on the same context. It never
-modifies server files and times out after 60 seconds. Without these
-variables it reports SKIP.

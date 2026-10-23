@@ -4,7 +4,8 @@ int main(void) { return 77; }
 #else
 #define FUSE_USE_VERSION 26
 #define _FILE_OFFSET_BITS 64
-#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <nfsc/libnfs.h>
 
@@ -12,6 +13,11 @@ static int test_get_fd(struct nfs_context *);
 static int test_which_events(struct nfs_context *);
 static int test_service(struct nfs_context *, int);
 static int test_lstat(struct nfs_context *, const char *, nfs_cb, void *);
+
+#define CHECK(x) do { if (!(x)) { \
+        fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #x); \
+        exit(EXIT_FAILURE); \
+} } while (0)
 
 #define main fuse_nfs_program_main
 #define nfs_get_fd test_get_fd
@@ -45,8 +51,8 @@ static int test_lstat(struct nfs_context *context, const char *path,
                       nfs_cb cb, void *opaque)
 {
         (void)context;
-        assert(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
-        assert(pending_callback == NULL);
+        CHECK(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
+        CHECK(pending_callback == NULL);
         if (strcmp(path, "/queue-failure") == 0)
                 return -ENOMEM;
         pending_callback = cb;
@@ -58,8 +64,8 @@ static int test_lstat(struct nfs_context *context, const char *path,
 
 static int test_service(struct nfs_context *context, int revents)
 {
-        assert(revents == 0);
-        assert(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
+        CHECK(revents == 0);
+        CHECK(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
         if (pending_callback) {
                 struct nfs_stat_64 st = {0};
                 st.nfs_mode = S_IFREG | 0444;
@@ -78,16 +84,16 @@ int main(void)
         int statuses[] = { -ENOENT, -EACCES, -ENOMEM };
         alarm(5);
         nfs = nfs_init_context();
-        assert(nfs != NULL);
+        CHECK(nfs != NULL);
         custom_uid = custom_gid = 0;
         nfs_oper.init(NULL);
         for (int i = 0; i < 3; i++) {
                 memset(&st, 0xa5, sizeof(st));
                 memcpy(&untouched, &st, sizeof(st));
-                assert(fuse_nfs_getattr(paths[i], &st) == statuses[i]);
-                assert(memcmp(&st, &untouched, sizeof(st)) == 0);
-                assert(fuse_nfs_getattr("/existing", &st) == 0);
-                assert(st.st_size == 1234 && S_ISREG(st.st_mode));
+                CHECK(fuse_nfs_getattr(paths[i], &st) == statuses[i]);
+                CHECK(memcmp(&st, &untouched, sizeof(st)) == 0);
+                CHECK(fuse_nfs_getattr("/existing", &st) == 0);
+                CHECK(st.st_size == 1234 && S_ISREG(st.st_mode));
         }
         stop_nfs_service();
         nfs_destroy_context(nfs);
