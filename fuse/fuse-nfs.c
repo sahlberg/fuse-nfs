@@ -33,9 +33,11 @@
 #include <poll.h>
 #endif
 #include <pthread.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <nfsc/libnfs.h>
+#include <nfsc/libnfs-raw.h>
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -46,19 +48,26 @@
 #define FUSE_STAT stat
 #endif
 
-#define LOG(...) do {                                              \
-        if (logfile) {                                          \
-                FILE *fh = fopen(logfile, "a+");                \
-                time_t t = time(NULL);                          \
-                char tmp[256];                                  \
-                strftime(tmp, sizeof(tmp), "%T", localtime(&t));\
-                fprintf(fh, "[NFS] %s ", tmp);			\
-                fprintf(fh, __VA_ARGS__);                       \
-                fclose(fh);                                     \
-        }                                                       \
-} while (0);
-
 static char *logfile;
+static const char *mount_path;
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+#define LOG(...) do {                                                    \
+        if (logfile) {                                                 \
+                pthread_mutex_lock(&log_mutex);                        \
+                FILE *fh = fopen(logfile, "a");                        \
+                if (fh) {                                              \
+                        time_t t = time(NULL);                         \
+                        char tmp[32];                                 \
+                        strftime(tmp, sizeof(tmp),                     \
+                                 "%Y-%m-%dT%H:%M:%SZ", gmtime(&t));    \
+                        fprintf(fh, "[NFS] %s ", tmp);                 \
+                        fprintf(fh, __VA_ARGS__);                      \
+                        fclose(fh);                                    \
+                }                                                      \
+                pthread_mutex_unlock(&log_mutex);                      \
+        }                                                              \
+} while (0)
 
 /* Only one thread at a time can enter libnfs */
 static pthread_mutex_t nfs_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -157,7 +166,7 @@ service_nfs(void *arg)
 	struct nfs_context *context = arg;
 	struct pollfd pfd[2];
 	int count = 1;
-	int ret, revents;
+	int ret, revents, poll_errno;
 
 #ifndef WIN32
 	pfd[1].fd = nfs_wakeup[0];
@@ -174,7 +183,9 @@ service_nfs(void *arg)
 
 		/* Keep servicing libnfs timers even when FUSE has no requests. */
 		ret = poll(pfd, count, 100);
-		if (ret < 0 && errno == EINTR) {
+		poll_errno = ret < 0 ? errno : 0;
+		if (ret < 0 && poll_errno == EINTR) {
+			poll_errno = 0;
 			pfd[0].revents = pfd[1].revents = 0;
 			ret = 0;
 		}
@@ -198,8 +209,23 @@ service_nfs(void *arg)
 		/* Callbacks and their waiters share nfs_mutex, including results. */
 		pthread_cond_broadcast(&nfs_reply_cond);
 		if (ret < 0) {
-			fprintf(stderr, "NFS service failed: %s\n",
-				nfs_get_error(context));
+			const char *error = rpc_get_error(nfs_get_rpc_context(context));
+			char diagnostic[1024];
+			if (!error || !*error)
+				error = "<no RPC diagnostic>";
+			snprintf(diagnostic, sizeof(diagnostic),
+			    "fatal NFS service failure pid=%ld status=%d polled_fd=%d current_fd=%d "
+			    "revents=%d flags=%s%s%s%s%s poll_errno=%d poll_error=[%s] rpc_error=[%s]",
+			    (long)getpid(), ret, pfd[0].fd, nfs_get_fd(context), revents,
+			    revents >= 0 && (revents & POLLIN) ? "POLLIN " : "",
+			    revents >= 0 && (revents & POLLOUT) ? "POLLOUT " : "",
+			    revents >= 0 && (revents & POLLERR) ? "POLLERR " : "",
+			    revents >= 0 && (revents & POLLHUP) ? "POLLHUP " : "",
+			    revents >= 0 && (revents & POLLNVAL) ? "POLLNVAL " : "",
+			    poll_errno, poll_errno ? strerror(poll_errno) : "none", error);
+			fprintf(stderr, "%s\n", diagnostic);
+			fflush(stderr);
+			LOG("%s\n", diagnostic);
 			/* Do not return while libnfs holds callbacks into waiter stacks. */
 			exit(EXIT_FAILURE);
 		}
@@ -215,14 +241,24 @@ fuse_nfs_init(struct fuse_conn_info *conn)
 	(void)conn;
 
 	/* FUSE calls init after daemonizing; no thread may span that fork. */
+	LOG("daemon started pid=%ld mountpoint=[%s]\n",
+	    (long)getpid(), mount_path ? mount_path : "");
 #ifndef WIN32
 	if (pipe(nfs_wakeup) < 0) {
+		int saved_errno = errno;
+		LOG("fatal NFS wakeup pipe failure pid=%ld errno=%d error=[%s]\n",
+		    (long)getpid(), saved_errno, strerror(saved_errno));
+		errno = saved_errno;
 		perror("Failed to create NFS wakeup pipe");
 		exit(EXIT_FAILURE);
 	}
 	for (int i = 0; i < 2; i++) {
 		if (fcntl(nfs_wakeup[i], F_SETFL, O_NONBLOCK) < 0 ||
 		    fcntl(nfs_wakeup[i], F_SETFD, FD_CLOEXEC) < 0) {
+			int saved_errno = errno;
+			LOG("fatal NFS wakeup pipe setup failure pid=%ld errno=%d error=[%s]\n",
+			    (long)getpid(), saved_errno, strerror(saved_errno));
+			errno = saved_errno;
 			perror("Failed to configure NFS wakeup pipe");
 			exit(EXIT_FAILURE);
 		}
@@ -231,6 +267,8 @@ fuse_nfs_init(struct fuse_conn_info *conn)
 	nfs_service_running = 1;
 	ret = pthread_create(&nfs_service_thread, NULL, service_nfs, nfs);
 	if (ret != 0) {
+		LOG("fatal NFS service thread failure pid=%ld status=%d error=[%s]\n",
+		    (long)getpid(), ret, strerror(ret));
 		fprintf(stderr, "Failed to start NFS service: %s\n", strerror(ret));
 		exit(EXIT_FAILURE);
 	}
@@ -1344,6 +1382,7 @@ int main(int argc, char *argv[])
 
 	nfs = nfs_init_context();
 	if (nfs == NULL) {
+		LOG("fatal NFS context initialization failure pid=%ld\n", (long)getpid());
 		fprintf(stderr, "Failed to init context\n");
 		ret = 10;
 		goto finished;
@@ -1351,6 +1390,8 @@ int main(int argc, char *argv[])
 
 	urls = nfs_parse_url_dir(nfs, url);
 	if (urls == NULL) {
+		LOG("fatal NFS URL parse failure pid=%ld error=[%s]\n",
+		    (long)getpid(), nfs_get_error(nfs));
 		fprintf(stderr, "Failed to parse url : %s\n", nfs_get_error(nfs));
 		ret = 10;
 		goto finished;
@@ -1366,16 +1407,21 @@ int main(int argc, char *argv[])
 
 	ret = nfs_mount(nfs, urls->server, urls->path);
 	if (ret != 0) {
+		LOG("fatal NFS mount failure pid=%ld status=%d error=[%s]\n",
+		    (long)getpid(), ret, nfs_get_error(nfs));
 		fprintf(stderr, "Failed to mount nfs share : %s\n", nfs_get_error(nfs));
 		goto finished;
 	}
 
 	fuse_nfs_argv[1] = mnt;
+	mount_path = mnt;
 
 	LOG("Starting fuse_main()\n");
 	ret = fuse_main(fuse_nfs_argc, fuse_nfs_argv, &nfs_oper, NULL);
+	LOG("fuse_main returned pid=%ld status=%d\n", (long)getpid(), ret);
 
 finished:
+	LOG("daemon exiting pid=%ld status=%d\n", (long)getpid(), ret);
 	/* fuse_main has joined its workers; callbacks no longer own their stacks. */
 	stop_nfs_service();
 	nfs_destroy_url(urls);

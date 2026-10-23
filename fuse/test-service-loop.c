@@ -1,35 +1,50 @@
+/* This test uses assertions with side effects; keep them active in all builds. */
+#undef NDEBUG
 /* Exercise the real FUSE event loop without a server or a FUSE mount. */
 #ifdef WIN32
 int main(void) { return 77; } /* POSIX signals and fork are used by this test. */
 #else
 #define FUSE_USE_VERSION 26
 #define _FILE_OFFSET_BITS 64
-#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <poll.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <nfsc/libnfs.h>
+#include <nfsc/libnfs-raw.h>
 
+static FILE *test_fopen(const char *, const char *);
 static int test_get_fd(struct nfs_context *context);
 static int test_which_events(struct nfs_context *context);
 static int test_service(struct nfs_context *context, int revents);
 static const char *test_get_error(struct nfs_context *context);
+static const char *test_rpc_error(struct rpc_context *rpc);
 static int test_poll(struct pollfd *fds, nfds_t count, int timeout);
+
+#define CHECK(x) do { if (!(x)) { \
+        fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #x); \
+        exit(EXIT_FAILURE); \
+} } while (0)
 
 #define main fuse_nfs_program_main
 #define nfs_get_fd test_get_fd
 #define nfs_which_events test_which_events
 #define nfs_service test_service
 #define nfs_get_error test_get_error
+#define rpc_get_error test_rpc_error
 #define poll test_poll
+#define fopen test_fopen
 #include "fuse-nfs.c"
+#undef fopen
 #undef main
 #undef nfs_get_fd
 #undef nfs_which_events
 #undef nfs_service
 #undef nfs_get_error
 #undef poll
+#undef rpc_get_error
 
 #define WORKERS 8
 #define ROUNDS 200
@@ -39,9 +54,31 @@ static pthread_t service_owner;
 static int have_owner;
 static struct sync_cb_data *pending[WORKERS];
 static int interrupt_next, interrupts;
+static const char *captured_stderr_path;
+
+static FILE *test_fopen(const char *path, const char *mode)
+{
+        if (fail_service && captured_stderr_path && path == logfile) {
+                char line[2048];
+                FILE *capture = fopen(captured_stderr_path, "r");
+                CHECK(capture != NULL);
+                /* The fallback must already be visible before logfile I/O. */
+                CHECK(fgets(line, sizeof(line), capture) != NULL);
+                CHECK(strstr(line, "rpc_error=[injected connection failure]") != NULL);
+                fclose(capture);
+        }
+        return fopen(path, mode);
+}
+
+static const char *test_rpc_error(struct rpc_context *rpc)
+{
+        (void)rpc;
+        return "injected connection failure";
+}
 
 static int test_poll(struct pollfd *fds, nfds_t count, int timeout)
 {
+        int ret;
         pthread_mutex_lock(&nfs_mutex);
         if (interrupt_next) {
                 interrupt_next = 0;
@@ -52,7 +89,14 @@ static int test_poll(struct pollfd *fds, nfds_t count, int timeout)
                 return -1;
         }
         pthread_mutex_unlock(&nfs_mutex);
-        return poll(fds, count, timeout);
+        ret = poll(fds, count, timeout);
+        pthread_mutex_lock(&nfs_mutex);
+        if (fail_service) {
+                fds[0].revents = POLLIN | POLLERR | POLLHUP;
+                ret = 1;
+        }
+        pthread_mutex_unlock(&nfs_mutex);
+        return ret;
 }
 
 static int test_get_fd(struct nfs_context *context)
@@ -70,19 +114,21 @@ static int test_which_events(struct nfs_context *context)
 static const char *test_get_error(struct nfs_context *context)
 {
         (void)context;
-        return "injected fatal service error";
+        return "NFS4ERR_NOENT: stale pathname diagnostic";
 }
 
 static int test_service(struct nfs_context *context, int revents)
 {
         (void)context;
-        assert(revents == 0); /* EINTR must not be reported as a socket error. */
-        assert(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
+        /* EINTR must not be reported as a socket error. */
+        CHECK(revents == 0 || (fail_service &&
+               revents == (POLLIN | POLLERR | POLLHUP)));
+        CHECK(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
         if (!have_owner) {
                 service_owner = pthread_self();
                 have_owner = 1;
         }
-        assert(pthread_equal(service_owner, pthread_self()));
+        CHECK(pthread_equal(service_owner, pthread_self()));
         service_calls++;
         if (fail_service)
                 return -1;
@@ -90,7 +136,7 @@ static int test_service(struct nfs_context *context, int revents)
                 if (pending[i]) {
                         /* Publish the flag first, just like the real callbacks. */
                         pending[i]->is_finished = 1;
-                        pending[i]->status = 1000 + i;
+                        pending[i]->status = i % 2 ? -ENOENT : 1000 + i;
                         *(int *)pending[i]->return_data = 2000 + i;
                         pending[i] = NULL;
                         completions++;
@@ -104,7 +150,7 @@ static void start_loop(void)
                 fprintf(stderr, "FAIL: no background NFS service lifecycle\n");
                 exit(1);
         }
-        assert(pipe(server_pipe) == 0);
+        CHECK(pipe(server_pipe) == 0);
         service_calls = completions = fail_service = have_owner = 0;
         memset(pending, 0, sizeof(pending));
         nfs_oper.init(NULL);
@@ -128,12 +174,12 @@ static void *request_worker(void *arg)
                 struct sync_cb_data cb = {0};
                 cb.return_data = &result;
                 pthread_mutex_lock(&nfs_mutex);
-                assert(pending[id] == NULL);
+                CHECK(pending[id] == NULL);
                 pending[id] = &cb;
                 pthread_mutex_unlock(&nfs_mutex);
                 wait_for_nfs_reply(nfs, &cb);
-                assert(cb.status == 1000 + id);
-                assert(result == 2000 + id);
+                CHECK(cb.status == (id % 2 ? -ENOENT : 1000 + id));
+                CHECK(result == 2000 + id);
         }
         return NULL;
 }
@@ -145,12 +191,20 @@ int main(void)
         int before, after, status;
         pid_t child;
         struct timespec pause = {0, 400000000};
+	char diagnostic_path[] = "./fuse-nfs-service-XXXXXX";
+	char diagnostic_line[2048];
+	char stderr_path[] = "./fuse-nfs-stderr-XXXXXX";
+	FILE *diagnostic_file;
+	int diagnostic_fd;
 
+        nfs = nfs_init_context();
+        CHECK(nfs != NULL);
+        custom_uid = custom_gid = 0;
         alarm(20);
         start_loop();
         nanosleep(&pause, NULL);
         pthread_mutex_lock(&nfs_mutex);
-        assert(service_calls >= 2);
+        CHECK(service_calls >= 2);
         before = service_calls;
         pthread_mutex_unlock(&nfs_mutex);
         puts("PASS: NFS service runs while FUSE is idle");
@@ -160,52 +214,61 @@ int main(void)
         pthread_mutex_unlock(&nfs_mutex);
         nanosleep(&pause, NULL);
         pthread_mutex_lock(&nfs_mutex);
-        assert(service_calls > before);
-        assert(interrupts == 1);
+        CHECK(service_calls > before);
+        CHECK(interrupts == 1);
         pthread_mutex_unlock(&nfs_mutex);
         puts("PASS: interrupted poll keeps the service loop alive");
 
         for (int i = 0; i < WORKERS; i++) {
                 ids[i] = i;
-                assert(pthread_create(&workers[i], NULL, request_worker, &ids[i]) == 0);
+                CHECK(pthread_create(&workers[i], NULL, request_worker, &ids[i]) == 0);
         }
         for (int i = 0; i < WORKERS; i++)
-                assert(pthread_join(workers[i], NULL) == 0);
-        assert(completions == WORKERS * ROUNDS);
+                CHECK(pthread_join(workers[i], NULL) == 0);
+        CHECK(completions == WORKERS * ROUNDS);
         puts("PASS: 1600 concurrent replies, one service owner, complete results");
 
         {
                 struct sync_cb_data cb = { .is_finished = 1, .status = 42 };
                 wait_for_nfs_reply(nfs, &cb);
-                assert(cb.status == 42);
+                CHECK(cb.status == 42);
         }
         puts("PASS: reply completed before wait is not lost");
         stop_loop();
         before = service_calls;
         nanosleep(&pause, NULL);
         after = service_calls;
-        assert(before == after);
+        CHECK(before == after);
         puts("PASS: stop joins the service thread and is idempotent");
 
         fflush(NULL);
         child = fork();
-        assert(child >= 0);
+        CHECK(child >= 0);
         if (child == 0) {
                 alarm(3);
                 start_loop();
                 stop_loop();
                 _exit(0);
         }
-        assert(waitpid(child, &status, 0) == child);
-        assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+        CHECK(waitpid(child, &status, 0) == child);
+        CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
         puts("PASS: lifecycle starts correctly after fork");
 
         fflush(NULL);
+	diagnostic_fd = mkstemp(diagnostic_path);
+	CHECK(diagnostic_fd >= 0);
+	close(diagnostic_fd);
+        diagnostic_fd = mkstemp(stderr_path);
+        CHECK(diagnostic_fd >= 0);
+        close(diagnostic_fd);
         child = fork();
-        assert(child >= 0);
+        CHECK(child >= 0);
         if (child == 0) {
                 struct sync_cb_data cb = {0};
+                captured_stderr_path = stderr_path;
+                CHECK(freopen(stderr_path, "w", stderr) != NULL);
                 alarm(3);
+		logfile = diagnostic_path;
                 start_loop();
                 pthread_mutex_lock(&nfs_mutex);
                 fail_service = 1;
@@ -214,8 +277,27 @@ int main(void)
                 wait_for_nfs_reply(nfs, &cb);
                 _exit(99);
         }
-        assert(waitpid(child, &status, 0) == child);
-        assert(WIFEXITED(status) && WEXITSTATUS(status) == EXIT_FAILURE);
+        CHECK(waitpid(child, &status, 0) == child);
+        CHECK(WIFEXITED(status) && WEXITSTATUS(status) == EXIT_FAILURE);
+	diagnostic_file = fopen(diagnostic_path, "r");
+	CHECK(diagnostic_file != NULL);
+	CHECK(fgets(diagnostic_line, sizeof(diagnostic_line), diagnostic_file));
+	CHECK(fgets(diagnostic_line, sizeof(diagnostic_line), diagnostic_file));
+	CHECK(strstr(diagnostic_line, "fatal NFS service failure") != NULL);
+	CHECK(strstr(diagnostic_line, "rpc_error=[injected connection failure]") != NULL);
+        CHECK(strstr(diagnostic_line, "NOENT") == NULL);
+        CHECK(strstr(diagnostic_line, "flags=POLLIN POLLERR POLLHUP ") != NULL);
+	fclose(diagnostic_file);
+	unlink(diagnostic_path);
+        diagnostic_file = fopen(stderr_path, "r");
+        CHECK(diagnostic_file != NULL);
+        CHECK(fgets(diagnostic_line, sizeof(diagnostic_line), diagnostic_file));
+        CHECK(strstr(diagnostic_line, "rpc_error=[injected connection failure]") != NULL);
+        CHECK(strstr(diagnostic_line, "NOENT") == NULL);
+        CHECK(strstr(diagnostic_line, "flags=POLLIN POLLERR POLLHUP ") != NULL);
+        fclose(diagnostic_file);
+        unlink(stderr_path);
+        nfs_destroy_context(nfs);
         puts("PASS: fatal service failure terminates without dangling callbacks");
         puts("PASS: all NFS service loop regression cases");
         return 0;
