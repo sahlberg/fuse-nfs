@@ -31,9 +31,10 @@ Daemon diagnostics
 
 -L FILE records UTC timestamps, daemon startup and exit, and fatal NFS
 initialization, mount, and service errors. Service failures include the RPC
-diagnostic, socket descriptors, poll flags, and poll errno. Fatal service
-messages are written and flushed to stderr before attempting the optional
-logfile, so a blocked logfile cannot suppress the stderr diagnostic.
+diagnostic, socket descriptors, poll flags, and poll errors (Winsock codes
+on Windows). Fatal messages are written and flushed to stderr before
+attempting the optional logfile, so a blocked logfile cannot suppress the
+stderr diagnostic.
 Logfile writes remain synchronous.
 
 These diagnostics use existing libnfs APIs and do not require a libnfs

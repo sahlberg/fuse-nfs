@@ -183,8 +183,13 @@ service_nfs(void *arg)
 
 		/* Keep servicing libnfs timers even when FUSE has no requests. */
 		ret = poll(pfd, count, 100);
+#ifdef WIN32
+		poll_errno = ret < 0 ? WSAGetLastError() : 0;
+		if (ret < 0 && poll_errno == WSAEINTR) {
+#else
 		poll_errno = ret < 0 ? errno : 0;
 		if (ret < 0 && poll_errno == EINTR) {
+#endif
 			poll_errno = 0;
 			pfd[0].revents = pfd[1].revents = 0;
 			ret = 0;
@@ -211,6 +216,16 @@ service_nfs(void *arg)
 		if (ret < 0) {
 			const char *error = rpc_get_error(nfs_get_rpc_context(context));
 			char diagnostic[1024];
+#ifdef WIN32
+			char poll_error[64];
+			if (poll_errno)
+				snprintf(poll_error, sizeof(poll_error),
+				    "Winsock error %d", poll_errno);
+			else
+				strcpy(poll_error, "none");
+#else
+			const char *poll_error = poll_errno ? strerror(poll_errno) : "none";
+#endif
 			if (!error || !*error)
 				error = "<no RPC diagnostic>";
 			snprintf(diagnostic, sizeof(diagnostic),
@@ -222,7 +237,7 @@ service_nfs(void *arg)
 			    revents >= 0 && (revents & POLLERR) ? "POLLERR " : "",
 			    revents >= 0 && (revents & POLLHUP) ? "POLLHUP " : "",
 			    revents >= 0 && (revents & POLLNVAL) ? "POLLNVAL " : "",
-			    poll_errno, poll_errno ? strerror(poll_errno) : "none", error);
+			    poll_errno, poll_error, error);
 			fprintf(stderr, "%s\n", diagnostic);
 			fflush(stderr);
 			LOG("%s\n", diagnostic);
@@ -246,20 +261,20 @@ fuse_nfs_init(struct fuse_conn_info *conn)
 #ifndef WIN32
 	if (pipe(nfs_wakeup) < 0) {
 		int saved_errno = errno;
+		perror("Failed to create NFS wakeup pipe");
+		fflush(stderr);
 		LOG("fatal NFS wakeup pipe failure pid=%ld errno=%d error=[%s]\n",
 		    (long)getpid(), saved_errno, strerror(saved_errno));
-		errno = saved_errno;
-		perror("Failed to create NFS wakeup pipe");
 		exit(EXIT_FAILURE);
 	}
 	for (int i = 0; i < 2; i++) {
 		if (fcntl(nfs_wakeup[i], F_SETFL, O_NONBLOCK) < 0 ||
 		    fcntl(nfs_wakeup[i], F_SETFD, FD_CLOEXEC) < 0) {
 			int saved_errno = errno;
+			perror("Failed to configure NFS wakeup pipe");
+			fflush(stderr);
 			LOG("fatal NFS wakeup pipe setup failure pid=%ld errno=%d error=[%s]\n",
 			    (long)getpid(), saved_errno, strerror(saved_errno));
-			errno = saved_errno;
-			perror("Failed to configure NFS wakeup pipe");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -267,9 +282,10 @@ fuse_nfs_init(struct fuse_conn_info *conn)
 	nfs_service_running = 1;
 	ret = pthread_create(&nfs_service_thread, NULL, service_nfs, nfs);
 	if (ret != 0) {
+		fprintf(stderr, "Failed to start NFS service: %s\n", strerror(ret));
+		fflush(stderr);
 		LOG("fatal NFS service thread failure pid=%ld status=%d error=[%s]\n",
 		    (long)getpid(), ret, strerror(ret));
-		fprintf(stderr, "Failed to start NFS service: %s\n", strerror(ret));
 		exit(EXIT_FAILURE);
 	}
 	nfs_service_started = 1;
@@ -1382,17 +1398,19 @@ int main(int argc, char *argv[])
 
 	nfs = nfs_init_context();
 	if (nfs == NULL) {
-		LOG("fatal NFS context initialization failure pid=%ld\n", (long)getpid());
 		fprintf(stderr, "Failed to init context\n");
+		fflush(stderr);
+		LOG("fatal NFS context initialization failure pid=%ld\n", (long)getpid());
 		ret = 10;
 		goto finished;
 	}
 
 	urls = nfs_parse_url_dir(nfs, url);
 	if (urls == NULL) {
+		fprintf(stderr, "Failed to parse url : %s\n", nfs_get_error(nfs));
+		fflush(stderr);
 		LOG("fatal NFS URL parse failure pid=%ld error=[%s]\n",
 		    (long)getpid(), nfs_get_error(nfs));
-		fprintf(stderr, "Failed to parse url : %s\n", nfs_get_error(nfs));
 		ret = 10;
 		goto finished;
 	}
@@ -1407,9 +1425,10 @@ int main(int argc, char *argv[])
 
 	ret = nfs_mount(nfs, urls->server, urls->path);
 	if (ret != 0) {
+		fprintf(stderr, "Failed to mount nfs share : %s\n", nfs_get_error(nfs));
+		fflush(stderr);
 		LOG("fatal NFS mount failure pid=%ld status=%d error=[%s]\n",
 		    (long)getpid(), ret, nfs_get_error(nfs));
-		fprintf(stderr, "Failed to mount nfs share : %s\n", nfs_get_error(nfs));
 		goto finished;
 	}
 
