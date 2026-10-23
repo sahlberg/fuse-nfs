@@ -78,6 +78,9 @@ FUSE OPTIONS
 		       1.	Each read or write system call will initiate one or more read or write operations, data will not be cached in the kernel.
 		       2.	The return value of the read and write system calls will correspond to the return values of the read and write operations. 
 		       		This is useful for example if the file size is not known in advance (before reading it).
+	[-F|--foreground]
+		Keep FUSE in the foreground without enabling debug output.
+		An external supervisor can observe the exit status or signal.
 	[-k|--kernel_cache]
 		This option disables flushing the cache of the file contents on every open.
 		This should only be enabled on filesystems, where the file data is never changed externally (not through the mounted FUSE filesystem).  

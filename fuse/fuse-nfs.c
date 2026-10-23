@@ -1048,6 +1048,7 @@ void print_usage(char *name)
 			"\t\t Default is fuse-nfs with kernel prefexing with fuse. \n"
 			"\t [-b|--blkdev] \n"
 			"\t [-D|--debug] \n"
+			"\t [-F|--foreground] \n"
 			"\t [-i|--intr] \n"
 			"\t [-I SIGNAL|--intr_signal=SIGNAL] \n"
 			"\t [-O|--read_only] \n"
@@ -1074,6 +1075,7 @@ int main(int argc, char *argv[])
 		{ "uid", required_argument, 0, 'u' },
 		{ "gid", required_argument, 0, 'g' },
 		{ "debug", no_argument, 0, 'D' },
+		{ "foreground", no_argument, 0, 'F' },
 		{ "default_permissions", required_argument, 0, 'p' },
 		{ "direct_io", no_argument, 0, 'd' },
 		{ "allow_root", no_argument, 0, 'r' },
@@ -1106,6 +1108,7 @@ int main(int argc, char *argv[])
 
 	int c;
 	int opt_idx = 0;
+	int foreground = 0;
 	char *url = NULL;
 	char *mnt = NULL;
 	char *idstr = NULL;
@@ -1127,7 +1130,7 @@ int main(int argc, char *argv[])
 	struct nfs_url *urls = NULL;
 
 	int fuse_nfs_argc = 2;
-	char *fuse_nfs_argv[35] = {
+	char *fuse_nfs_argv[36] = {
 		"fuse-nfs",
 		"<export>",
 		NULL,
@@ -1163,7 +1166,7 @@ int main(int argc, char *argv[])
 		NULL,
         };
 
-	while ((c = getopt_long(argc, argv, "?am:n:U:G:u:g:Dp:drklL:hf:s:biR:W:H:ASK:E:N:T:C:oYI:qQct:O", long_opts, &opt_idx)) > 0) {
+	while ((c = getopt_long(argc, argv, "?am:n:U:G:u:g:DFp:drklL:hf:s:biR:W:H:ASK:E:N:T:C:oYI:qQct:O", long_opts, &opt_idx)) > 0) {
 		switch (c) {
 		case '?':
 			print_usage(argv[0]);
@@ -1193,6 +1196,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'D':
 			fuse_nfs_argv[fuse_nfs_argc++] = "-odebug";
+			break;
+		case 'F':
+			foreground = 1;
 			break;
 		case 'p':
 			fuse_default_permissions=atoi(optarg);
@@ -1294,6 +1300,9 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
+
+	if (foreground)
+		fuse_nfs_argv[fuse_nfs_argc++] = "-f";
 
 	if (url == NULL) {
 		fprintf(stderr, "-n was not specified.\n");
