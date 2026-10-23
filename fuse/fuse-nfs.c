@@ -406,6 +406,8 @@ fuse_nfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
+	if (cb_data.status < 0)
+		return cb_data.status;
 
 	nfsdir = cb_data.return_data;
 	while ((nfsdirent = nfs_readdir(nfs, nfsdir)) != NULL) {
@@ -946,7 +948,9 @@ fuse_nfs_statfs(const char *path, struct statvfs* stbuf)
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
-  
+	if (cb_data.status < 0)
+		return cb_data.status;
+
         stbuf->f_bsize      = svfs.f_bsize;
         stbuf->f_frsize     = svfs.f_frsize;
         stbuf->f_fsid       = svfs.f_fsid;

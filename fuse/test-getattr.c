@@ -1,4 +1,4 @@
-/* Failed getattr must leave its output untouched and allow later requests. */
+/* Failed metadata requests must not consume results or prevent later requests. */
 #ifdef WIN32
 int main(void) { return 77; }
 #else
@@ -13,6 +13,10 @@ static int test_get_fd(struct nfs_context *);
 static int test_which_events(struct nfs_context *);
 static int test_service(struct nfs_context *, int);
 static int test_lstat(struct nfs_context *, const char *, nfs_cb, void *);
+static int test_statvfs(struct nfs_context *, const char *, nfs_cb, void *);
+static int test_opendir(struct nfs_context *, const char *, nfs_cb, void *);
+static struct nfsdirent *test_readdir(struct nfs_context *, struct nfsdir *);
+static void test_closedir(struct nfs_context *, struct nfsdir *);
 
 #define CHECK(x) do { if (!(x)) { \
         fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #x); \
@@ -24,16 +28,27 @@ static int test_lstat(struct nfs_context *, const char *, nfs_cb, void *);
 #define nfs_which_events test_which_events
 #define nfs_service test_service
 #define nfs_lstat64_async test_lstat
+#define nfs_statvfs_async test_statvfs
+#define nfs_opendir_async test_opendir
+#define nfs_readdir test_readdir
+#define nfs_closedir test_closedir
 #include "fuse-nfs.c"
 #undef main
 #undef nfs_get_fd
 #undef nfs_which_events
 #undef nfs_service
 #undef nfs_lstat64_async
+#undef nfs_statvfs_async
+#undef nfs_opendir_async
+#undef nfs_readdir
+#undef nfs_closedir
 
 static nfs_cb pending_callback;
 static void *pending_opaque;
 static int pending_status;
+static enum { ATTR, STATFS, READDIR } pending_kind;
+static char directory_token;
+static int directory_reads, directory_closes;
 
 static int test_get_fd(struct nfs_context *context)
 {
@@ -51,6 +66,7 @@ static int test_lstat(struct nfs_context *context, const char *path,
                       nfs_cb cb, void *opaque)
 {
         (void)context;
+        pending_kind = ATTR;
         CHECK(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
         CHECK(pending_callback == NULL);
         if (strcmp(path, "/queue-failure") == 0)
@@ -62,16 +78,56 @@ static int test_lstat(struct nfs_context *context, const char *path,
         return 0;
 }
 
+static int test_statvfs(struct nfs_context *context, const char *path,
+                        nfs_cb cb, void *opaque)
+{
+        int ret = test_lstat(context, path, cb, opaque);
+        pending_kind = STATFS;
+        return ret;
+}
+
+static int test_opendir(struct nfs_context *context, const char *path,
+                        nfs_cb cb, void *opaque)
+{
+        int ret = test_lstat(context, path, cb, opaque);
+        pending_kind = READDIR;
+        return ret;
+}
+
+static struct nfsdirent *test_readdir(struct nfs_context *context,
+                                    struct nfsdir *dir)
+{
+        (void)context;
+        CHECK(dir == (struct nfsdir *)&directory_token);
+        directory_reads++;
+        return NULL; /* A successfully opened empty directory. */
+}
+
+static void test_closedir(struct nfs_context *context, struct nfsdir *dir)
+{
+        (void)context;
+        CHECK(dir == (struct nfsdir *)&directory_token);
+        CHECK(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
+        directory_closes++;
+}
+
 static int test_service(struct nfs_context *context, int revents)
 {
         CHECK(revents == 0);
         CHECK(pthread_mutex_trylock(&nfs_mutex) == EBUSY);
         if (pending_callback) {
                 struct nfs_stat_64 st = {0};
+                struct statvfs svfs = {0};
+                void *result;
                 st.nfs_mode = S_IFREG | 0444;
                 st.nfs_size = 1234;
+                svfs.f_bsize = 4096;
+                svfs.f_blocks = 1234;
+                result = pending_kind == ATTR ? (void *)&st :
+                         pending_kind == STATFS ? (void *)&svfs :
+                         (void *)&directory_token;
                 pending_callback(pending_status, context,
-                                 pending_status ? NULL : &st, pending_opaque);
+                                 pending_status ? NULL : result, pending_opaque);
                 pending_callback = NULL;
         }
         return 0;
@@ -80,6 +136,7 @@ static int test_service(struct nfs_context *context, int revents)
 int main(void)
 {
         struct FUSE_STAT st, untouched;
+        struct statvfs svfs, svfs_untouched;
         const char *paths[] = { "/missing/.nomedia", "/denied", "/queue-failure" };
         int statuses[] = { -ENOENT, -EACCES, -ENOMEM };
         alarm(5);
@@ -94,10 +151,23 @@ int main(void)
                 CHECK(memcmp(&st, &untouched, sizeof(st)) == 0);
                 CHECK(fuse_nfs_getattr("/existing", &st) == 0);
                 CHECK(st.st_size == 1234 && S_ISREG(st.st_mode));
+
+                memset(&svfs, 0xa5, sizeof(svfs));
+                memcpy(&svfs_untouched, &svfs, sizeof(svfs));
+                CHECK(fuse_nfs_statfs(paths[i], &svfs) == statuses[i]);
+                CHECK(memcmp(&svfs, &svfs_untouched, sizeof(svfs)) == 0);
+                CHECK(fuse_nfs_statfs("/existing", &svfs) == 0);
+                CHECK(svfs.f_bsize == 4096 && svfs.f_blocks == 1234);
+
+                directory_reads = directory_closes = 0;
+                CHECK(fuse_nfs_readdir(paths[i], NULL, NULL, 0, NULL) == statuses[i]);
+                CHECK(directory_reads == 0 && directory_closes == 0);
+                CHECK(fuse_nfs_readdir("/existing", NULL, NULL, 0, NULL) == 0);
+                CHECK(directory_reads == 1 && directory_closes == 1);
         }
         stop_nfs_service();
         nfs_destroy_context(nfs);
-        puts("PASS: getattr errors preserve output and subsequent requests succeed");
+        puts("PASS: metadata errors preserve output and subsequent requests succeed");
         return 0;
 }
 #endif
