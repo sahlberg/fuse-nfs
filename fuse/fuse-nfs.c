@@ -337,6 +337,8 @@ fuse_nfs_getattr(const char *path, struct FUSE_STAT *stbuf)
 		return ret;
 	}
 	wait_for_nfs_reply(nfs, &cb_data);
+	if (cb_data.status < 0)
+		return cb_data.status;
 
 	stbuf->st_dev          = st.nfs_dev;
 	stbuf->st_ino          = st.nfs_ino;
