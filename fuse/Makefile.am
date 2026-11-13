@@ -6,3 +6,4 @@ check_PROGRAMS = test-service-loop test-foreground
 TESTS = $(check_PROGRAMS)
 
 check_PROGRAMS += test-getattr
+check_PROGRAMS += test-close

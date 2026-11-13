@@ -560,15 +560,18 @@ static int fuse_nfs_release(const char *path, struct fuse_file_info *fi)
 {
 	struct sync_cb_data cb_data;
 	struct nfsfh *nfsfh = (struct nfsfh *)fi->fh;
+	int ret;
 
         memset(&cb_data, 0, sizeof(struct sync_cb_data));
 
 	pthread_mutex_lock(&nfs_mutex);
-	nfs_close_async(nfs, nfsfh, generic_cb, &cb_data);
+	ret = nfs_close_async(nfs, nfsfh, generic_cb, &cb_data);
 	pthread_mutex_unlock(&nfs_mutex);
+	if (ret < 0)
+		return ret;
 	wait_for_nfs_reply(nfs, &cb_data);
 
-	return 0;
+	return cb_data.status;
 }
 
 static void
